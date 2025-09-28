@@ -1,0 +1,17 @@
+# pixi environments
+.pixi
+*.egg-info
+pixi.lock
+
+# Python build artifacts
+*.egg-info/
+**/__pycache__/
+
+# VSCode settings
+.vscode/
+
+# GDB history
+.gdb_history
+
+# Local build directories
+**/*build/**

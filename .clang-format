@@ -1,0 +1,65 @@
+# Generated from CLion C/C++ Code Style settings
+---
+Language: Cpp
+BasedOnStyle: Google
+AccessModifierOffset: -4
+AllowShortEnumsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+AlwaysBreakTemplateDeclarations: Yes
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterFunction: false
+  AfterNamespace: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+BreakBeforeBraces: Attach
+BreakConstructorInitializers: BeforeColon
+BreakConstructorInitializersBeforeComma: false
+ColumnLimit: 80
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ContinuationIndentWidth: 4
+IncludeCategories:
+  - Regex: '^<(fmt|gtest|range)/.*'
+    Priority: 3
+  - Regex: '^<chrono.*'
+    Priority: 2
+  - Regex: '^<c.*' # C headers
+    Priority: 1
+  - Regex: '^<.*'
+    Priority: 2
+  - Regex: '^".*'
+    Priority: 4
+  - Regex: '.*'
+    Priority: 5
+IncludeIsMainRegex: '([-_](test|unittest))?$'
+IndentCaseLabels: false
+IndentWidth: 4
+InsertBraces: true
+InsertNewlineAtEOF: true
+MacroBlockBegin: ''
+MacroBlockEnd: ''
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: false
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInConditionalStatement: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+TabWidth: 4
+...
