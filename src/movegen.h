@@ -15,12 +15,23 @@ struct BoardInfo {
     Square king_sq;
 };
 
-struct MoveGenerator {
-    Board &board;
-    std::vector<Move> moves;
-
+class MoveGenerator {
+public:
     MoveGenerator(Board &board);
 
+    void generate(Type type);
+
+    const std::vector<Move> &moves();
+
+    static bool has_legal_move(Board &board);
+
+    static bool is_legal_move(Board &board, Move move);
+
+    static u64 perft(Board &board, i32 depth, bool is_root = true);
+
+    static u64 perft_pseudo_legal(Board &board, i32 depth, bool is_root = true);
+
+private:
     void update_boardinfo();
 
     Bitboard get_to_mask(Type type);
@@ -62,21 +73,30 @@ struct MoveGenerator {
 
     void generate_castlings(Type type);
 
-    void generate(Type type);
-
     void generate_all();
 
-protected:  // tmp variables
-    BoardInfo bi;
+    static void filter_legal(MoveGenerator &gen);
+
+    static void check_pseudo_legal(MoveGenerator &gen);
+
+    Board &board_;
+    std::vector<Move> moves_;
+    BoardInfo bi_;  // tmp variable
 };
 
-bool has_legal_move(Board &board);
+// Convenience aliases
+constexpr auto has_legal_move = &MoveGenerator::has_legal_move;
 
-bool is_legal_move(Board &board, Move move);
+constexpr auto is_legal_move = &MoveGenerator::is_legal_move;
 
-u64 perft(Board &board, i32 depth, bool is_root = true);
+// Have to use functions to get default arguments working
+inline u64 perft(Board &board, i32 depth, bool is_root = true) {
+    return MoveGenerator::perft(board, depth, is_root);
+}
 
-u64 perft_pseudo_legal(Board &board, i32 depth, bool is_root = true);
+inline u64 perft_pseudo_legal(Board &board, i32 depth, bool is_root = true) {
+    return MoveGenerator::perft_pseudo_legal(board, depth, is_root);
+}
 
 }  // namespace tuna::movegen
 

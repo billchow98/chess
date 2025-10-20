@@ -26,98 +26,109 @@ const auto MILLIS_MAX = std::numeric_limits<Millis>::max();
 
 auto LMR_REDUCTION = std::array<std::array<Depth, 64>, 64>();
 
-Searcher::Searcher(Board &board) : board(board) {}
+Searcher::Searcher(Board &board) : board_(board) {}
 
 void Searcher::new_game() {
-    tt.clear();
-    butterfly_hist = {};
+    tt_.clear();
+    butterfly_hist_ = {};
 }
 
 void Searcher::resize_tt(u64 mb) {
-    tt.resize(mb);
+    tt_.resize(mb);
+}
+
+// Must pass by value because we make a copy in std::thread
+void Searcher::go(GoCmd cmd) {
+    new_search(cmd);
+    iterative_deepening();
+    print_bestmove();
+}
+
+void Searcher::stop() {
+    stop_requested_ = true;
 }
 
 void Searcher::allocate_time(GoCmd &cmd) {
-    max_millis = 0;
-    auto time = board.turn == color::White ? cmd.wtime : cmd.btime;
+    max_millis_ = 0;
+    auto time = board_.turn() == color::White ? cmd.wtime : cmd.btime;
     if (time) {
-        max_millis += std::max(*time / 30_u64, 1_u64);
+        max_millis_ += std::max(*time / 30_u64, 1_u64);
     }
-    auto inc = board.turn == color::White ? cmd.winc : cmd.binc;
+    auto inc = board_.turn() == color::White ? cmd.winc : cmd.binc;
     if (inc) {
-        max_millis += *inc;
+        max_millis_ += *inc;
     }
     if (!time && !inc) {
-        max_millis = MILLIS_MAX;
+        max_millis_ = MILLIS_MAX;
     } else {
-        max_millis = std::min(max_millis, *time);
+        max_millis_ = std::min(max_millis_, *time);
     }
 }
 
 void Searcher::new_search(GoCmd &cmd) {
-    clock_start = clock::now();
-    stop_requested = false;
-    max_depth = cmd.depth ? *cmd.depth : PLY_MAX;
-    bestmove = move::Null;
-    node_cnt = 0;
-    depth_one_node_cnt = 0;
-    root_score = 0;
-    iter_depth = 0;
-    cur_ply = 0;
+    clock_start_ = clock::now();
+    stop_requested_ = false;
+    max_depth_ = cmd.depth ? *cmd.depth : PLY_MAX;
+    bestmove_ = move::Null;
+    node_cnt_ = 0;
+    depth_one_node_cnt_ = 0;
+    root_score_ = 0;
+    iter_depth_ = 0;
+    cur_ply_ = 0;
     allocate_time(cmd);
-    stk = {};
-    stk.resize(cur_ply + 1);
+    stk_ = {};
+    stk_.resize(cur_ply_ + 1);
 }
 
 void Searcher::reset_info() {
-    stk.resize(cur_ply + 1);
+    stk_.resize(cur_ply_ + 1);
 }
 
 Millis Searcher::elapsed() {
     auto clock_end = clock::now();
     Millis elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         clock_end - clock_start)
+                         clock_end - clock_start_)
                          .count();
     return elapsed != 0 ? elapsed : 1;
 }
 
 bool Searcher::within_time_limit(Millis millis) {
-    return millis + cfg::UCI_LATENCY_MS < max_millis;
+    return millis + cfg::UCI_LATENCY_MS < max_millis_;
 }
 
 void Searcher::check_limits_reached() {
-    if (node_cnt % cfg::SEARCH_POLL_NODE_FREQ == 0 && iter_depth > 1) {
+    if (node_cnt_ % cfg::SEARCH_POLL_NODE_FREQ == 0 && iter_depth_ > 1) {
         if (!within_time_limit(elapsed())) {
-            stop_requested = true;
+            stop_requested_ = true;
         }
     }
 }
 
 void Searcher::make_move_end() {
-    node_cnt++;
+    node_cnt_++;
     check_limits_reached();
-    cur_ply++;
-    stk.resize(cur_ply + 1);
-    stk[cur_ply].pv_line.clear();
+    cur_ply_++;
+    stk_.resize(cur_ply_ + 1);
+    stk_[cur_ply_].pv_line.clear();
 }
 
 void Searcher::make_move(Move move) {
-    board.make_move(move);
+    board_.make_move(move);
     make_move_end();
 }
 
 void Searcher::unmake_move_end() {
-    cur_ply--;
+    cur_ply_--;
 }
 
 void Searcher::unmake_move() {
-    board.unmake_move();
+    board_.unmake_move();
     unmake_move_end();
 }
 
 void Searcher::update_pv_line(Move move) {
-    auto &pv_line = stk[cur_ply].pv_line;
-    auto &child_pv = stk[cur_ply + 1].pv_line;
+    auto &pv_line = stk_[cur_ply_].pv_line;
+    auto &child_pv = stk_[cur_ply_ + 1].pv_line;
     pv_line.clear();
     pv_line.push_back(move);
     pv_line.insert(pv_line.end(), child_pv.begin(), child_pv.end());
@@ -125,22 +136,22 @@ void Searcher::update_pv_line(Move move) {
 
 Score Searcher::qsearch(Score alpha, Score beta) {
     using movepick::MovePicker;
-    if (stop_requested) {
+    if (stop_requested_) {
         return 0;
     }
-    if (cur_ply == PLY_MAX) {
-        return eval::evaluate(board);
+    if (cur_ply_ == PLY_MAX) {
+        return eval::evaluate(board_);
     }
-    if (board.is_draw()) {
+    if (board_.is_draw()) {
         return score::DRAW;
     }
     // TT move here makes things worse
-    MovePicker mp(board, movepick::Qsearch, move::Null, stk[cur_ply].killers,
-                  butterfly_hist);
+    MovePicker mp(board_, movepick::Qsearch, move::Null, stk_[cur_ply_].killers,
+                  butterfly_hist_);
     auto best_score = score::MIN;
-    if (!board.in_check()) {
+    if (!board_.in_check()) {
         // Can only stand pat when not in check
-        best_score = eval::evaluate(board);
+        best_score = eval::evaluate(board_);
     }
     if (best_score > alpha) {
         alpha = best_score;
@@ -165,14 +176,14 @@ Score Searcher::qsearch(Score alpha, Score beta) {
     }
     // Checkmate
     if (best_score == score::MIN) {
-        return score::mate(cur_ply);
+        return score::mate(cur_ply_);
     }
     return best_score;
 }
 
 // Reverse futility pruning
 bool Searcher::can_rfp(bool is_pv_node, Depth depth) {
-    return !is_pv_node && depth <= 6 && !board.in_check();
+    return !is_pv_node && depth <= 6 && !board_.in_check();
 }
 
 Score Searcher::rfp_margin(Depth depth) {
@@ -182,15 +193,15 @@ Score Searcher::rfp_margin(Depth depth) {
 bool Searcher::material_can_nmp() {
     // Current side has king and >= 2 piece. We have to skip NMP if
     // we have no more pieces (high chance of zugzwang)
-    auto pc_cnt = bb::popcnt(board.color_bb[board.turn]);
-    pc_cnt -= 1;                                              // King
-    pc_cnt -= bb::popcnt(board.bb(piece::Pawn, board.turn));  // Pawns
+    auto pc_cnt = bb::popcnt(board_.color_bb(board_.turn()));
+    pc_cnt -= 1;                                                  // King
+    pc_cnt -= bb::popcnt(board_.bb(piece::Pawn, board_.turn()));  // Pawns
     return pc_cnt >= 1;
 }
 
 // Null move pruning
 bool Searcher::can_nmp(bool is_pv_node, Depth depth, Score eval, Score beta) {
-    return !is_pv_node && depth >= 2 && !board.in_check() && eval >= beta &&
+    return !is_pv_node && depth >= 2 && !board_.in_check() && eval >= beta &&
            material_can_nmp();
 }
 
@@ -199,12 +210,12 @@ Depth Searcher::nmp_reduction(Depth depth) {
 }
 
 void Searcher::make_null_move() {
-    board.make_null_move();
+    board_.make_null_move();
     make_move_end();
 }
 
 void Searcher::unmake_null_move() {
-    board.unmake_null_move();
+    board_.unmake_null_move();
     unmake_move_end();
 }
 
@@ -234,7 +245,7 @@ Depth Searcher::lmr(Depth depth, i32 moves_played, bool is_pv_node) {
 // Killer heuristic
 // Only unique killers are stored. FIFO replacement policy
 void Searcher::update_killers(Move move) {
-    auto &killers = stk[cur_ply].killers;
+    auto &killers = stk_[cur_ply_].killers;
     auto it = std::find(killers.begin(), killers.end(), move);
     if (it == killers.end()) {
         // Remove last element and add move to the front of the 'queue'
@@ -264,10 +275,10 @@ HistoryScore Searcher::clamp_history_score(i32 bonus) {
 }
 
 HistoryScore &Searcher::get_butterfly_history(Move move) {
-    auto sd = board.turn;
+    auto sd = board_.turn();
     auto from = move::from(move);
     auto to = move::to(move);
-    return butterfly_hist[sd][from][to];
+    return butterfly_hist_[sd][from][to];
 }
 
 void Searcher::update_butterfly_history(Move move, HistoryScore clamped_bonus) {
@@ -298,38 +309,38 @@ void Searcher::update_quiet_histories(Move move,
 // Principal variation search
 Score Searcher::pvs(Depth depth, Score alpha, Score beta) {
     using movepick::MovePicker;
-    if (stop_requested) {
+    if (stop_requested_) {
         return 0;
     }
-    if (cur_ply == PLY_MAX) {
-        return eval::evaluate(board);
+    if (cur_ply_ == PLY_MAX) {
+        return eval::evaluate(board_);
     }
     if (depth <= 0) {
         return qsearch(alpha, beta);
     }
-    if (board.is_draw()) {
+    if (board_.is_draw()) {
         return score::DRAW;
     }
-    auto is_root_node = cur_ply == 0;
+    auto is_root_node = cur_ply_ == 0;
     auto is_pv_node = beta - alpha > 1;
-    tt::Entry &tte = tt.find(board.hash);
+    tt::Entry &tte = tt_.find(board_.hash());
     auto ttm = move::Null;
     if (tte.is_valid()) {
-        ttm = tte.move;
-        auto tts = tte.search_score(cur_ply);
+        ttm = tte.move();
+        auto tts = tte.search_score(cur_ply_);
         // Only using TT cutoffs when not PV does not seem to improve
         // strength. Worse by ~4 ELO after 2000 games (10+0.1)
-        if (tte.depth >= depth) {
-            if (tte.bound & tt::Lower && tts >= beta) {
+        if (tte.depth() >= depth) {
+            if (tte.bound() & tt::Lower && tts >= beta) {
                 return tts;
             }
-            if (tte.bound & tt::Upper && tts <= alpha) {
+            if (tte.bound() & tt::Upper && tts <= alpha) {
                 return tts;
             }
         }
     }
     auto eval =
-        tte.is_valid() ? tte.search_score(cur_ply) : eval::evaluate(board);
+        tte.is_valid() ? tte.search_score(cur_ply_) : eval::evaluate(board_);
     if (can_rfp(is_pv_node, depth)) {
         auto margin = rfp_margin(depth);
         if (eval - margin >= beta) {
@@ -345,25 +356,25 @@ Score Searcher::pvs(Depth depth, Score alpha, Score beta) {
             return score;
         }
     }
-    MovePicker mp(board, movepick::Main, ttm, stk[cur_ply].killers,
-                  butterfly_hist);
+    MovePicker mp(board_, movepick::Main, ttm, stk_[cur_ply_].killers,
+                  butterfly_hist_);
     auto best_score = score::MIN;
     auto best_move = move::Null;
     auto ttb = tt::Upper;
-    auto in_check = board.in_check();
+    auto in_check = board_.in_check();
     std::vector<Move> quiets_played;
     // TODO: Find out why wrapping this in an `if (!in_check)` condition
     // changes the number of nodes searched
     quiets_played.reserve(cfg::MOVE_VEC_RESERVE_CAP);
     auto moves_played = 0;
     for (auto move : mp) {
-        auto is_capture = board.is_capture(move);
+        auto is_capture = board_.is_capture(move);
         if (!is_root_node && can_lmp(depth, moves_played)) {
             mp.skip_quiet_moves();
         }
         make_move(move);
         auto is_first_move = moves_played == 0;
-        auto gives_check = board.in_check();
+        auto gives_check = board_.in_check();
         Score score;
         Depth ext = extension(gives_check);
         Depth new_depth = depth + ext - 1;
@@ -406,26 +417,26 @@ Score Searcher::pvs(Depth depth, Score alpha, Score beta) {
     }
     // Checkmate or stalemate
     if (best_score == score::MIN) {
-        return board.in_check() ? score::mate(cur_ply) : score::DRAW;
+        return board_.in_check() ? score::mate(cur_ply_) : score::DRAW;
     }
-    tte.update(board.hash, best_move, best_score, depth, ttb, cur_ply);
+    tte.update(board_.hash(), best_move, best_score, depth, ttb, cur_ply_);
     return best_score;
 }
 
 void Searcher::aspiration_window(Depth depth) {
     if (depth == 1) {
-        root_score = pvs(depth, score::MIN, score::MAX);
+        root_score_ = pvs(depth, score::MIN, score::MAX);
         return;
     }
     auto delta = cfg::ASP_WINDOW_SIZE;
-    auto alpha = root_score - delta;
-    auto beta = root_score + delta;
+    auto alpha = root_score_ - delta;
+    auto beta = root_score_ + delta;
     while (true) {
-        root_score = pvs(depth, alpha, beta);
-        if (root_score <= alpha) {
-            alpha = std::max(root_score - delta, score::MIN);
-        } else if (root_score >= beta) {
-            beta = std::min(root_score + delta, score::MAX);
+        root_score_ = pvs(depth, alpha, beta);
+        if (root_score_ <= alpha) {
+            alpha = std::max(root_score_ - delta, score::MIN);
+        } else if (root_score_ >= beta) {
+            beta = std::min(root_score_ + delta, score::MAX);
         } else {
             break;
         }
@@ -435,19 +446,19 @@ void Searcher::aspiration_window(Depth depth) {
 
 bool Searcher::can_search_next_depth() {
     // Not enough data to calculate branching factor
-    if (iter_depth == 1) {
-        depth_one_node_cnt = node_cnt;
+    if (iter_depth_ == 1) {
+        depth_one_node_cnt_ = node_cnt_;
         return true;
     }
-    auto base = static_cast<f64>(node_cnt) / depth_one_node_cnt;
-    auto exp = 1.0 / (iter_depth - 1);
+    auto base = static_cast<f64>(node_cnt_) / depth_one_node_cnt_;
+    auto exp = 1.0 / (iter_depth_ - 1);
     auto branching_factor = pow(base, exp);
     return within_time_limit(elapsed() * branching_factor);
 }
 
 std::string Searcher::pv_str() {
     std::string pv_str;
-    auto &pv_line = stk[0].pv_line;
+    auto &pv_line = stk_[0].pv_line;
     bool first = true;
     for (auto move : pv_line) {
         if (!first) {
@@ -460,25 +471,25 @@ std::string Searcher::pv_str() {
 }
 
 void Searcher::print_info() {
-    assert(!stop_requested);
+    assert(!stop_requested_);
     auto millis = elapsed();
-    auto nps = static_cast<u64>(1000. * node_cnt / millis);
+    auto nps = static_cast<u64>(1000. * node_cnt_ / millis);
     io::println(
         "info depth {} score {} nodes {} nps {} hashfull {} time {} pv {}",
-        iter_depth, score::to_str(root_score), node_cnt, nps, tt.hashfull(),
+        iter_depth_, score::to_str(root_score_), node_cnt_, nps, tt_.hashfull(),
         millis, pv_str());
 }
 
 void Searcher::update_bestmove() {
-    assert(!stop_requested && !stk[0].pv_line.empty());
-    bestmove = stk[0].pv_line[0];
+    assert(!stop_requested_ && !stk_[0].pv_line.empty());
+    bestmove_ = stk_[0].pv_line[0];
 }
 
 void Searcher::iterative_deepening() {
-    for (iter_depth = 1; iter_depth <= max_depth; iter_depth++) {
+    for (iter_depth_ = 1; iter_depth_ <= max_depth_; iter_depth_++) {
         reset_info();
-        aspiration_window(iter_depth);
-        if (stop_requested) {
+        aspiration_window(iter_depth_);
+        if (stop_requested_) {
             return;
         }
         print_info();
@@ -490,19 +501,8 @@ void Searcher::iterative_deepening() {
 }
 
 void Searcher::print_bestmove() {
-    assert(bestmove != move::Null);
-    io::println("bestmove {}", move::to_str(bestmove));
-}
-
-// Must pass by value because we make a copy in std::thread
-void Searcher::go(GoCmd cmd) {
-    new_search(cmd);
-    iterative_deepening();
-    print_bestmove();
-}
-
-void Searcher::stop() {
-    stop_requested = true;
+    assert(bestmove_ != move::Null);
+    io::println("bestmove {}", move::to_str(bestmove_));
 }
 
 void init() {

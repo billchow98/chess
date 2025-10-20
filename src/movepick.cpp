@@ -13,39 +13,51 @@ bool ScoredMove::operator<(const ScoredMove &rhs) const {
     return score > rhs.score;
 }
 
-MovePicker::Iterator::Iterator(MovePicker &mp) : mp(mp), move(mp.next()) {}
+MovePicker::Iterator::Iterator(MovePicker &mp) : mp_(mp), move_(mp.next()) {}
 MovePicker::Iterator::Iterator(MovePicker &mp, bool is_end)
-    : mp(mp), move(move::Null) {}
+    : mp_(mp), move_(move::Null) {}
 
 Move MovePicker::Iterator::operator*() {
-    return move;
+    return move_;
 }
 
 MovePicker::Iterator &MovePicker::Iterator::operator++() {
-    move = mp.next();
+    move_ = mp_.next();
     return *this;
 }
 
 bool MovePicker::Iterator::operator==(MovePicker::Iterator &rhs) {
-    return &mp == &rhs.mp && move == rhs.move;
+    return &mp_ == &rhs.mp_ && move_ == rhs.move_;
 }
 
 MovePicker::MovePicker(Board &board, Type type, Move tt_move,
                        std::array<Move, cfg::KILLERS_COUNT> &killers,
                        ButterflyHistory &butterfly_hist)
-    : board(board), gen(board), tt_move(tt_move), killers(killers),
-      butterfly_hist(butterfly_hist), skip_quiets(false) {
+    : board_(board), gen_(board), tt_move_(tt_move), killers_(killers),
+      butterfly_hist_(butterfly_hist), skip_quiets_(false) {
     using namespace stage;
     if (board.in_check()) {
-        stage = EvasionsTt;
+        stage_ = EvasionsTt;
     } else {
-        stage = type == Type::Main ? MainTt : QsearchTt;
+        stage_ = type == Type::Main ? MainTt : QsearchTt;
     }
 }
 
+MovePicker::Iterator MovePicker::begin() {
+    return {*this};
+}
+
+MovePicker::Iterator MovePicker::end() {
+    return {*this, true};
+}
+
+void MovePicker::skip_quiet_moves() {
+    skip_quiets_ = true;
+}
+
 MoveScore MovePicker::mvv_lva(Move move) {
-    auto lva = board.piece_on[move::from(move)];
-    auto mvv = board.piece_on[move::to(move)];
+    auto lva = board_.piece_on(move::from(move));
+    auto mvv = board_.piece_on(move::to(move));
     auto promotion = move::promotion(move);
     if (promotion != piece::None) {
         // If not a promotion capture, must be a queen promotion
@@ -64,17 +76,17 @@ MoveScore MovePicker::mvv_lva(Move move) {
 }
 
 MoveScore MovePicker::history_score(Move move) {
-    auto sd = board.turn;
+    auto sd = board_.turn();
     auto from = move::from(move);
     auto to = move::to(move);
-    return butterfly_hist[sd][from][to];
+    return butterfly_hist_[sd][from][to];
 }
 
 MoveScore MovePicker::score_move(movegen::Type type, Move move) {
     switch (type) {
     case movegen::Evasions:
-        return board.is_capture(move) ? mvv_lva(move) + 2 * HISTORY_MAX
-                                      : history_score(move);
+        return board_.is_capture(move) ? mvv_lva(move) + 2 * HISTORY_MAX
+                                       : history_score(move);
     case movegen::Captures:
         return mvv_lva(move);
     case movegen::Quiets:
@@ -85,34 +97,35 @@ MoveScore MovePicker::score_move(movegen::Type type, Move move) {
 }
 
 void MovePicker::sort_moves(movegen::Type type) {
-    moves.resize(gen.moves.size());
-    for (auto i = 0; i < gen.moves.size(); i++) {
-        moves[i] = {gen.moves[i], score_move(type, gen.moves[i])};
+    auto gen_moves = gen_.moves();
+    moves_.resize(gen_moves.size());
+    for (auto i = 0; i < gen_moves.size(); i++) {
+        moves_[i] = {gen_moves[i], score_move(type, gen_moves[i])};
     }
-    std::sort(moves.begin(), moves.end());
+    std::sort(moves_.begin(), moves_.end());
 }
 
 void MovePicker::init_killers() {
-    cur_killer = killers.begin();
-    stage++;
+    cur_killer_ = killers_.begin();
+    stage_++;
 }
 
 void MovePicker::generate(movegen::Type type) {
-    gen.generate(type);
+    gen_.generate(type);
     sort_moves(type);
-    cur = moves.begin();
-    stage++;
+    cur_ = moves_.begin();
+    stage_++;
 }
 
 bool MovePicker::is_fully_legal(Move move) {
-    return move != move::Null && board.is_pseudo_legal(move) &&
-           board.is_legal(move);
+    return move != move::Null && board_.is_pseudo_legal(move) &&
+           board_.is_legal(move);
 }
 
 Move MovePicker::next_killer() {
-    while (cur_killer != killers.end()) {
-        auto move = *cur_killer++;
-        if (move != tt_move && is_fully_legal(move)) {
+    while (cur_killer_ != killers_.end()) {
+        auto move = *cur_killer_++;
+        if (move != tt_move_ && is_fully_legal(move)) {
             return move;
         }
     }
@@ -120,14 +133,14 @@ Move MovePicker::next_killer() {
 }
 
 bool MovePicker::is_repeated_move(Move move) {
-    return move == tt_move ||
-           std::find(killers.begin(), killers.end(), move) != killers.end();
+    return move == tt_move_ ||
+           std::find(killers_.begin(), killers_.end(), move) != killers_.end();
 }
 
 Move MovePicker::retrieve_next() {
-    while (cur != moves.end()) {
-        auto move = cur++->move;
-        if (!is_repeated_move(move) && board.is_legal(move)) {
+    while (cur_ != moves_.end()) {
+        auto move = cur_++->move;
+        if (!is_repeated_move(move) && board_.is_legal(move)) {
             return move;
         }
     }
@@ -136,14 +149,14 @@ Move MovePicker::retrieve_next() {
 
 Move MovePicker::next() {
     Move move;
-    switch (stage) {
+    switch (stage_) {
         using namespace stage;
     case EvasionsTt:
     case MainTt:
     case QsearchTt:
-        stage++;
-        if (is_fully_legal(tt_move)) {
-            return tt_move;
+        stage_++;
+        if (is_fully_legal(tt_move_)) {
+            return tt_move_;
         } else {
             return next();
         }
@@ -158,27 +171,27 @@ Move MovePicker::next() {
         init_killers();
         return next();
     case MainQuietsInit:
-        if (!skip_quiets) {
+        if (!skip_quiets_) {
             generate(movegen::Quiets);
         } else {
-            stage++;
+            stage_++;
         }
         return next();
     case MainKillers:
         if ((move = next_killer()) != move::Null) {
             return move;
         } else {
-            stage++;
+            stage_++;
             return next();
         }
     case Evasions:
     case MainCaptures:
     case QsearchCaptures:
     case MainQuiets:
-        if (!skip_quiets && (move = retrieve_next()) != move::Null) {
+        if (!skip_quiets_ && (move = retrieve_next()) != move::Null) {
             return move;
         } else {
-            stage++;
+            stage_++;
             return next();
         }
     case EvasionsEnd:
@@ -188,18 +201,6 @@ Move MovePicker::next() {
     default:
         unreachable();
     }
-}
-
-MovePicker::Iterator MovePicker::begin() {
-    return {*this};
-}
-
-MovePicker::Iterator MovePicker::end() {
-    return {*this, true};
-}
-
-void MovePicker::skip_quiet_moves() {
-    skip_quiets = true;
 }
 
 }  // namespace tuna::movepick

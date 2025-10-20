@@ -27,12 +27,6 @@ std::string to_str(UciOptionType ot) {
 }
 
 struct Option {
-    std::string name;
-    UciOptionType type;
-    std::optional<u64> default_value;
-    std::optional<u64> min_value;
-    std::optional<u64> max_value;
-
     std::string to_str() {
         std::string s;
         s += std::format("option name {} type {}", name,
@@ -42,6 +36,12 @@ struct Option {
         s += max_value ? std::format(" max {}", *max_value) : "";
         return s;
     }
+
+    std::string name;
+    UciOptionType type;
+    std::optional<u64> default_value;
+    std::optional<u64> min_value;
+    std::optional<u64> max_value;
 };
 
 const auto OPTIONS = std::array{

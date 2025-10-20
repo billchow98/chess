@@ -14,23 +14,33 @@ enum {
     Exact = Lower | Upper,
 };
 
-struct __attribute__((packed)) Entry {
-    u32 hash;
-    Move move;
-    Score score;
-    Ply depth;  // Will only store non-negative depth
-    Bound bound;
-
+class __attribute__((packed)) Entry {
+public:
     void invalidate();
 
     bool is_valid();
-
-    Score to_tt_score(Score score, Ply ply);
 
     Score search_score(Ply ply);
 
     void update(Hash hash, Move move, Score score, Ply depth, Bound bound,
                 Ply ply);
+
+    u32 hash();
+
+    Move move();
+
+    Ply depth();
+
+    Bound bound();
+
+private:
+    Score to_tt_score(Score score, Ply ply);
+
+    u32 hash_;
+    Move move_;
+    Score score_;
+    Ply depth_;  // Will only store non-negative depth
+    Bound bound_;
 };
 
 static_assert(sizeof(Entry) == 10);
@@ -43,12 +53,19 @@ struct alignas(32) Bucket {
 
 static_assert(sizeof(Bucket) == 32);
 
-struct Tt {
-    std::vector<Bucket> buckets;
-    u64 size;
-
+class Tt {
+public:
     Tt();
 
+    void clear();
+
+    void resize(u64 mb);
+
+    Entry &find(Hash hash);
+
+    i32 hashfull();
+
+private:
     void init_buckets();
 
     void set_power_two_size(u64 mb);
@@ -59,13 +76,8 @@ struct Tt {
 
     Bucket &get_bucket(Hash hash);
 
-    Entry &find(Hash hash);
-
-    void clear();
-
-    void resize(u64 mb);
-
-    i32 hashfull();
+    std::vector<Bucket> buckets_;
+    u64 size_;
 };
 
 }  // namespace tuna::tt

@@ -45,28 +45,16 @@ enum {
 }
 
 struct ScoredMove {
+    bool operator<(const ScoredMove &rhs) const;
+
     Move move;
     MoveScore score;
-
-    bool operator<(const ScoredMove &rhs) const;
 };
 
-struct MovePicker {
-    Board &board;
-    MoveGenerator gen;
-    Move tt_move;
-    std::array<Move, cfg::KILLERS_COUNT> &killers;
-    std::array<Move, cfg::KILLERS_COUNT>::iterator cur_killer;
-    ButterflyHistory &butterfly_hist;
-    Stage stage;
-    std::vector<ScoredMove>::iterator cur;
-    std::vector<ScoredMove> moves;
-    bool skip_quiets;
-
-    struct Iterator {
-        MovePicker &mp;
-        Move move;
-
+class MovePicker {
+public:
+    class Iterator {
+    public:
         Iterator(MovePicker &mp);
 
         Iterator(MovePicker &mp, bool is_end);
@@ -76,12 +64,23 @@ struct MovePicker {
         Iterator &operator++();
 
         bool operator==(Iterator &rhs);
+
+    private:
+        MovePicker &mp_;
+        Move move_;
     };
 
     MovePicker(Board &board, Type type, Move tt_move,
                std::array<Move, cfg::KILLERS_COUNT> &killers,
                ButterflyHistory &butterfly_hist);
 
+    Iterator begin();
+
+    Iterator end();
+
+    void skip_quiet_moves();
+
+private:
     MoveScore mvv_lva(Move move);
 
     MoveScore history_score(Move move);
@@ -104,11 +103,16 @@ struct MovePicker {
 
     Move next();
 
-    Iterator begin();
-
-    Iterator end();
-
-    void skip_quiet_moves();
+    Board &board_;
+    MoveGenerator gen_;
+    Move tt_move_;
+    std::array<Move, cfg::KILLERS_COUNT> &killers_;
+    std::array<Move, cfg::KILLERS_COUNT>::iterator cur_killer_;
+    ButterflyHistory &butterfly_hist_;
+    Stage stage_;
+    std::vector<ScoredMove>::iterator cur_;
+    std::vector<ScoredMove> moves_;
+    bool skip_quiets_;
 };
 
 }  // namespace tuna::movepick

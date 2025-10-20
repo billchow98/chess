@@ -46,30 +46,65 @@ struct MoveInfo {
     File to_fl;
 };
 
-struct Board {
-    std::array<Bitboard, piece::size> piece_bb;
-    std::array<Bitboard, color::size> color_bb;
-    std::array<Piece, 64> piece_on;
-    Color turn;
-    File ep;
-    CastleFlags castle_flags;
-    Ply halfmove_clock;
-    u16 fullmove_cnt;
-    Hash hash;
-    std::vector<UndoInfo> undos;
-    Bitboard checkers;
-    Bitboard pinned;
-    // material always from white's perspective
-    Score mg_material;
-    Score eg_material;
-    i32 game_phase;
-
+class Board {
+public:
     Board();
+
+    void setup(PositionCmd cmd);
+
+    void setup_fen(std::string fen);
+
+    std::string debug_str();
 
     Bitboard bb(Piece pc, Color cr);
 
     Bitboard all();
 
+    Square king_sq(Color sd);
+
+    void make_move(Move move);
+
+    void make_null_move();
+
+    void unmake_move();
+
+    void unmake_null_move();
+
+    Bitboard single_pushes(Bitboard pawns);
+
+    Bitboard double_pushes(Bitboard pawns);
+
+    Bitboard evasion_mask();
+
+    bool is_pseudo_legal(Move move);
+
+    bool is_legal(Move move);
+
+    bool in_check();
+
+    bool is_capture(Move move);
+
+    bool is_draw();
+
+    Bitboard color_bb(Color sd);
+
+    Piece piece_on(Square sq);
+
+    Color turn();
+
+    File ep();
+
+    Hash hash();
+
+    i32 checkers_count();
+
+    Score mg_material();  // material always from white's perspective
+
+    Score eg_material();  // material always from white's perspective
+
+    i32 game_phase();
+
+private:
     void update_moveinfo(Move move);
 
     void create_undo(Move move);
@@ -116,8 +151,6 @@ struct Board {
 
     void flip_turn();
 
-    Square king_sq(Color sd);
-
     Bitboard pawn_attacks_from(Square sq, Color sd);
 
     Bitboard attacks_from(Piece pc, Square sq);
@@ -133,10 +166,6 @@ struct Board {
     void update_pinned();
 
     void update_infos();
-
-    void make_move(Move move);
-
-    void make_null_move();
 
     bool is_undo_castle();
 
@@ -162,27 +191,15 @@ struct Board {
 
     void unmake_move_end(UndoInfo &undo);
 
-    void unmake_move();
-
-    void unmake_null_move();
-
     Bitboard rank_8();
 
-    Bitboard single_pushes(Bitboard pawns);
-
     Bitboard rank_2();
-
-    Bitboard double_pushes(Bitboard pawns);
 
     Bitboard pawn_attacks(Bitboard pawns);
 
     bool is_pseudo_legal_attack();
 
-    Bitboard evasion_mask();
-
     bool is_pseudo_legal_evasion();
-
-    bool is_pseudo_legal(Move move);
 
     bool is_attacked(Square sq, Bitboard attackers_mask);
 
@@ -200,8 +217,6 @@ struct Board {
 
     bool is_legal_ep(Square ksq);
 
-    bool is_legal(Move move);
-
     void setup_fen_pieces(std::istringstream &iss);
 
     void setup_fen_turn(std::istringstream &iss);
@@ -216,15 +231,7 @@ struct Board {
 
     void setup_fen_fullmove_cnt(std::istringstream &iss);
 
-    void setup_fen(std::string fen);
-
-    void setup(PositionCmd cmd);
-
-    bool in_check();
-
     bool has_legal_move();
-
-    bool is_capture(Move move);
 
     bool is_fifty_move_draw();
 
@@ -232,16 +239,27 @@ struct Board {
 
     bool is_repetition_draw();
 
-    bool is_draw();
-
     Piece color_on(Square sq);
 
     char debug_char(Square sq);
 
-    std::string debug_str();
-
-protected:  // tmp variables
-    MoveInfo mi;
+    std::array<Bitboard, piece::size> piece_bb_;
+    std::array<Bitboard, color::size> color_bb_;
+    std::array<Piece, 64> piece_on_;
+    Color turn_;
+    File ep_;
+    CastleFlags castle_flags_;
+    Ply halfmove_clock_;
+    u16 fullmove_cnt_;
+    Hash hash_;
+    std::vector<UndoInfo> undos_;
+    Bitboard checkers_;
+    Bitboard pinned_;
+    // material always from white's perspective
+    Score mg_material_;
+    Score eg_material_;
+    i32 game_phase_;
+    MoveInfo mi_;  // tmp variable
 };
 
 const auto CASTLING_INFO = std::array<CastlingInfo, 4>{{

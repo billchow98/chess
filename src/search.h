@@ -29,37 +29,27 @@ struct GoCmd {
 };
 
 struct SearchInfo {
-    std::array<Move, cfg::KILLERS_COUNT> killers;
-    std::vector<Move> pv_line;
-
     SearchInfo() {
         std::fill(killers.begin(), killers.end(), move::Null);
     }
+
+    std::array<Move, cfg::KILLERS_COUNT> killers;
+    std::vector<Move> pv_line;
 };
 
-struct Searcher {
-    Board &board;
-    std::chrono::time_point<clock> clock_start;
-    std::atomic<bool> stop_requested;
-    Tt tt;
-    ButterflyHistory butterfly_hist;
-    Ply max_depth;  // max_depth always > 0
-    Move bestmove;
-    u64 node_cnt;
-    u64 depth_one_node_cnt;
-    Score root_score;
-    Ply iter_depth;  // iter_depth always > 0
-    Ply cur_ply;
-    Millis max_millis;
-    // Can exceed PLY_MAX due to uci moves
-    std::vector<SearchInfo> stk;
-
+class Searcher {
+public:
     Searcher(Board &board);
 
     void new_game();
 
     void resize_tt(u64 mb);
 
+    void go(GoCmd cmd);
+
+    void stop();
+
+private:
     void allocate_time(GoCmd &cmd);
 
     void new_search(GoCmd &cmd);
@@ -138,9 +128,21 @@ struct Searcher {
 
     void print_bestmove();
 
-    void go(GoCmd cmd);
-
-    void stop();
+    Board &board_;
+    std::chrono::time_point<clock> clock_start_;
+    std::atomic<bool> stop_requested_;
+    Tt tt_;
+    ButterflyHistory butterfly_hist_;
+    Ply max_depth_;  // max_depth always > 0
+    Move bestmove_;
+    u64 node_cnt_;
+    u64 depth_one_node_cnt_;
+    Score root_score_;
+    Ply iter_depth_;  // iter_depth always > 0
+    Ply cur_ply_;
+    Millis max_millis_;
+    // Can exceed PLY_MAX due to uci moves
+    std::vector<SearchInfo> stk_;
 };
 
 void init();

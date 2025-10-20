@@ -26,258 +26,65 @@ Board::Board() {
     setup_fen(STARTPOS_FEN);
 }
 
+void Board::setup(PositionCmd cmd) {
+    if (cmd.type == PositionCmd::Startpos) {
+        cmd.fen = STARTPOS_FEN;
+    }
+    setup_fen(cmd.fen);
+    for (auto move : cmd.moves) {
+        make_move(move);
+    }
+}
+
+void Board::setup_fen(std::string fen) {
+    std::istringstream iss(fen);
+    std::fill(piece_on_.begin(), piece_on_.end(), piece::None);
+    hash_ = hash::Empty;
+    mg_material_ = 0;
+    eg_material_ = 0;
+    game_phase_ = 0;
+    setup_fen_pieces(iss);
+    setup_fen_turn(iss);
+    setup_fen_castle_flags(iss);
+    setup_fen_ep(iss);
+    setup_fen_halfmove_clock(iss);
+    setup_fen_fullmove_cnt(iss);
+    undos_.clear();
+    update_infos();
+}
+
+std::string Board::debug_str() {
+    std::string s;
+    for (Rank rk = rank::_8; rk >= rank::_1; rk--) {
+        for (File fl = file::A; fl <= file::H; fl++) {
+            auto sq = square::init(rk, fl);
+            s += debug_char(sq);
+        }
+        s += '\n';
+    }
+    s += std::format("turn: {}\n", color::debug_str(turn_));
+    s += std::format("ep: {}\n", file::debug_str(ep_));
+    s += std::format("castle_flags: {}\n",
+                     castle_flags::debug_str(castle_flags_));
+    s += std::format("halfmove_clock: {}\n", halfmove_clock_);
+    s += std::format("fullmove_cnt: {}\n", fullmove_cnt_);
+    s += std::format("hash: 0x{:016x}\n", hash_);
+    s += std::format("undos: size() = {}\n", undos_.size());
+    s += std::format("checkers:\n{}\n", bb::debug_str(checkers_));
+    s += std::format("pinned:\n{}", bb::debug_str(pinned_));
+    return s;
+}
+
 Bitboard Board::bb(Piece pc, Color cr) {
-    return piece_bb[pc] & color_bb[cr];
+    return piece_bb_[pc] & color_bb_[cr];
 }
 
 Bitboard Board::all() {
-    return color_bb[color::White] | color_bb[color::Black];
-}
-
-void Board::update_moveinfo(Move move) {
-    mi.from = move::from(move);
-    mi.to = move::to(move);
-    mi.promotion = move::promotion(move);
-    mi.from_pc = piece_on[mi.from];
-    mi.to_pc = piece_on[mi.to];
-    mi.from_rk = square::rank(mi.from);
-    mi.to_rk = square::rank(mi.to);
-    mi.from_fl = square::file(mi.from);
-    mi.to_fl = square::file(mi.to);
-}
-
-void Board::create_undo(Move move) {
-    UndoInfo undo;
-    undo.move = move;
-    // Corner case: en passant move.
-    // But captured_piece == piece::None will not be an issue.
-    undo.captured_piece = piece_on[move::to(move)];
-    undo.ep = ep;
-    undo.castle_flags = castle_flags;
-    undo.halfmove_clock = halfmove_clock;
-    undo.hash = hash;  // Needed for repetition detection for now
-    undo.checkers = checkers;
-    undo.pinned = pinned;
-    undos.push_back(undo);
-}
-
-void Board::clear_ep() {
-    if (ep != file::None) {
-        hash ^= hash::ep[ep];
-        ep = file::None;
-    }
-}
-
-void Board::make_turn() {
-    clear_ep();
-    halfmove_clock++;
-    if (turn == color::Black) {
-        fullmove_cnt++;
-    }
-}
-
-void Board::make_move_start(Move move) {
-    create_undo(move);
-    make_turn();
-}
-
-void Board::flip_piece(Color sd, Piece pc, Square sq) {
-    auto delta_bb = bb::from_sq(sq);
-    piece_bb[pc] ^= delta_bb;
-    color_bb[sd] ^= delta_bb;
-    hash ^= hash::piece[sd][pc][sq];
-}
-
-void Board::remove_piece(Color sd, Piece pc, Square sq) {
-    flip_piece(sd, pc, sq);
-    piece_on[sq] = piece::None;
-    mg_material -= eval::mg_piece_value(sd, pc, sq);
-    eg_material -= eval::eg_piece_value(sd, pc, sq);
-    game_phase -= eval::piece_phase(pc);
-}
-
-void Board::add_piece(Color sd, Piece pc, Square sq) {
-    flip_piece(sd, pc, sq);
-    piece_on[sq] = pc;
-    mg_material += eval::mg_piece_value(sd, pc, sq);
-    eg_material += eval::eg_piece_value(sd, pc, sq);
-    game_phase += eval::piece_phase(pc);
-}
-
-void Board::move_piece(Color sd, Piece pc, Square from, Square to) {
-    remove_piece(sd, pc, from);
-    add_piece(sd, pc, to);
-}
-
-void Board::move_from_piece() {
-    move_piece(turn, mi.from_pc, mi.from, mi.to);
-    if (mi.from_pc == piece::Pawn || mi.to_pc != piece::None) {
-        halfmove_clock = 0;
-    }
-}
-
-void Board::remove_to_piece() {
-    if (mi.to_pc != piece::None) {
-        remove_piece(!turn, mi.to_pc, mi.to);
-    }
-}
-
-bool Board::is_double_push() {
-    return mi.from_pc == piece::Pawn && abs(mi.to_rk - mi.from_rk) == 2;
-}
-
-bool Board::is_ep() {
-    return mi.from_pc == piece::Pawn && mi.from_fl != mi.to_fl &&
-           mi.to_pc == piece::None;
-}
-
-void Board::set_ep(File fl) {
-    assert(ep == file::None);
-    ep = fl;
-    hash ^= hash::ep[fl];
-}
-
-// Handles board.ep (double push) and ep captures
-void Board::handle_eps() {
-    if (is_double_push()) {
-        auto ep_fl = square::file(mi.from);
-        set_ep(ep_fl);
-    } else if (is_ep()) {
-        auto ep_sq = mi.to ^ 8;
-        remove_piece(!turn, piece::Pawn, ep_sq);
-    }
-}
-
-bool Board::is_promotion() {
-    return mi.promotion != piece::None;
-}
-
-// Handles promotion to_pc
-void Board::handle_promotions() {
-    if (is_promotion()) {
-        remove_piece(turn, piece::Pawn, mi.to);
-        add_piece(turn, mi.promotion, mi.to);
-    }
-}
-
-void Board::remove_castle_flags(CastleFlags cfs) {
-    hash ^= hash::castling[castle_flags];
-    castle_flags &= ~cfs;
-    hash ^= hash::castling[castle_flags];
-}
-
-void Board::handle_castle_flags() {
-    if (mi.from_pc == piece::Rook) {
-        for (Castling c = 0; c < 4; c++) {
-            if (mi.from == CASTLING_INFO[c].rook_from) {
-                remove_castle_flags(castle_flags::from_castling(c));
-            }
-        }
-    } else if (mi.from_pc == piece::King) {
-        namespace cf = castle_flags;
-        auto cfs = turn == color::White ? cf::WhiteAll : cf::BlackAll;
-        remove_castle_flags(cfs);
-    }
-    for (Castling c = 0; c < 4; c++) {
-        if (mi.to == CASTLING_INFO[c].rook_from) {
-            remove_castle_flags(castle_flags::from_castling(c));
-        }
-    }
-}
-
-bool Board::is_castle() {
-    return mi.from_pc == piece::King && abs(mi.to_fl - mi.from_fl) == 2;
-}
-
-void Board::handle_castle_moves() {
-    if (is_castle()) {
-        for (Castling c = 0; c < 4; c++) {
-            if (mi.to == CASTLING_INFO[c].king_to) {
-                auto rook_from = CASTLING_INFO[c].rook_from;
-                auto rook_to = CASTLING_INFO[c].rook_to;
-                move_piece(turn, piece::Rook, rook_from, rook_to);
-            }
-        }
-    }
-}
-
-// Handles castling moves (king/rook moved / opp rook captured) and
-// castling moves (move rook)
-void Board::handle_castles() {
-    handle_castle_flags();
-    handle_castle_moves();
-}
-
-void Board::flip_turn() {
-    turn = !turn;
-    hash ^= hash::side;
+    return color_bb_[color::White] | color_bb_[color::Black];
 }
 
 Square Board::king_sq(Color sd) {
     return bb::top_sq(bb(piece::King, sd));
-}
-
-// sd: color of attackers
-Bitboard Board::pawn_attacks_from(Square sq, Color sd) {
-    using namespace dir;
-    auto sq_bb = bb::from_sq(sq);
-    auto sh = [this](Bitboard bb, Direction d) {
-        return bb::shift(bb, d, turn);
-    };
-    return color_bb[sd] & (sd == turn ? sh(sq_bb, SW) | sh(sq_bb, SE)
-                                      : sh(sq_bb, NW) | sh(sq_bb, NE));
-}
-
-Bitboard Board::attacks_from(Piece pc, Square sq) {
-    if (pc == piece::Pawn) {
-        return pawn_attacks_from(sq, color::White) |
-               pawn_attacks_from(sq, color::Black);
-    } else {
-        return lookup::attacks(pc, sq, all());
-    }
-}
-
-Bitboard Board::attackers_to(Square sq) {
-    auto all_atkrs = bb::Empty;
-#pragma GCC unroll 6
-    for (Piece pc = piece::Pawn; pc <= piece::King; pc++) {
-        all_atkrs |= attacks_from(pc, sq) & piece_bb[pc];
-    }
-    all_atkrs &= all();
-    return all_atkrs;
-}
-
-void Board::update_checkers() {
-    checkers = attackers_to(king_sq(turn)) & color_bb[!turn];
-}
-
-Bitboard Board::bishop_likes() {
-    return piece_bb[piece::Bishop] | piece_bb[piece::Queen];
-}
-
-Bitboard Board::rook_likes() {
-    return piece_bb[piece::Rook] | piece_bb[piece::Queen];
-}
-
-void Board::update_pinned() {
-    pinned = bb::Empty;
-    auto ksq = king_sq(turn);
-    auto xrays = lookup::attacks(piece::Bishop, ksq) & bishop_likes() |
-                 lookup::attacks(piece::Rook, ksq) & rook_likes();
-    xrays &= color_bb[!turn];
-    auto occ = all() ^ xrays;
-    while (xrays) {
-        auto xray = bb::next_sq(xrays);
-        auto bb = lookup::in_between(ksq, xray) & occ;
-        if (bb::popcnt(bb) == 1) {
-            pinned |= bb;  // might repeat same sq
-        }
-    }
-}
-
-void Board::update_infos() {
-    update_checkers();
-    update_pinned();
 }
 
 void Board::make_move(Move move) {
@@ -298,17 +105,389 @@ void Board::make_null_move() {
     update_infos();
 }
 
+void Board::unmake_move() {
+    auto &undo = undos_.back();
+    flip_turn();
+    unmake_move_main(undo);
+    unmake_move_end(undo);
+    undos_.pop_back();
+}
+
+void Board::unmake_null_move() {
+    auto &undo = undos_.back();
+    flip_turn();
+    restore_ep(undo.ep);
+    halfmove_clock_ = undo.halfmove_clock;
+    if (turn_ == color::Black) {
+        fullmove_cnt_--;
+    }
+    assert(hash_ == undo.hash);
+    checkers_ = undo.checkers;
+    pinned_ = undo.pinned;
+    undos_.pop_back();
+}
+
+Bitboard Board::single_pushes(Bitboard pawns) {
+    return bb::shift(pawns, dir::N, turn_) & ~all();
+}
+
+Bitboard Board::double_pushes(Bitboard pawns) {
+    pawns &= rank_2();
+    auto tos = bb::shift(pawns, dir::N, turn_) & ~all();
+    return bb::shift(tos, dir::N, turn_) & ~all();
+}
+
+Bitboard Board::evasion_mask() {
+    auto checker = bb::top_sq(checkers_);
+    auto ksq = bb::top_sq(bb(piece::King, turn_));
+    return lookup::in_between(checker, ksq) | checkers_;
+}
+
+// Test if TT move is valid
+// Assumes the move is one that can be generated by MoveGenerator
+bool Board::is_pseudo_legal(Move move) {
+    update_moveinfo(move);
+    if (is_ep() || is_promotion() || is_castle()) {
+        return movegen::is_legal_move(*this, move);
+    }
+    auto from_bb = bb::from_sq(mi_.from);
+    auto to_bb = bb::from_sq(mi_.to);
+    if ((color_bb_[turn_] & from_bb) == bb::Empty ||
+        (color_bb_[turn_] & to_bb) != bb::Empty) {
+        return false;
+    }
+    if (!is_pseudo_legal_attack()) {
+        return false;
+    }
+    return checkers_ == bb::Empty || is_pseudo_legal_evasion();
+}
+
+bool Board::is_legal(Move move) {
+    update_moveinfo(move);
+    auto ksq = bb::top_sq(bb(piece::King, turn_));
+    if (mi_.from == ksq) {
+        if (king_to_is_attacked(ksq)) {
+            return false;
+        }
+        if (!is_legal_castle()) {
+            return false;
+        }
+        return true;
+    }
+    if (is_pinned() && !is_on_line(ksq, mi_.from, mi_.to)) {
+        return false;
+    }
+    if (is_ep()) {
+        return is_legal_ep(ksq);
+    }
+    return true;
+}
+
+bool Board::in_check() {
+    return checkers_ != bb::Empty;
+}
+
+bool Board::is_capture(Move move) {
+    update_moveinfo(move);
+    // Captures + queen promotions (same as movegen captures)
+    return mi_.promotion == piece::Queen ||
+           (all() & bb::from_sq(mi_.to)) != bb::Empty || is_ep();
+}
+
+// Does not detect stalemate
+bool Board::is_draw() {
+    return is_fifty_move_draw() || is_repetition_draw();
+}
+
+Bitboard Board::color_bb(Color sd) {
+    return color_bb_[sd];
+}
+
+Piece Board::piece_on(Square sq) {
+    return piece_on_[sq];
+}
+
+Color Board::turn() {
+    return turn_;
+}
+
+File Board::ep() {
+    return ep_;
+}
+
+Hash Board::hash() {
+    return hash_;
+}
+
+i32 Board::checkers_count() {
+    return bb::popcnt(checkers_);
+}
+
+Score Board::mg_material() {
+    return mg_material_;
+}
+
+Score Board::eg_material() {
+    return eg_material_;
+}
+
+i32 Board::game_phase() {
+    return game_phase_;
+}
+
+void Board::update_moveinfo(Move move) {
+    mi_.from = move::from(move);
+    mi_.to = move::to(move);
+    mi_.promotion = move::promotion(move);
+    mi_.from_pc = piece_on_[mi_.from];
+    mi_.to_pc = piece_on_[mi_.to];
+    mi_.from_rk = square::rank(mi_.from);
+    mi_.to_rk = square::rank(mi_.to);
+    mi_.from_fl = square::file(mi_.from);
+    mi_.to_fl = square::file(mi_.to);
+}
+
+void Board::create_undo(Move move) {
+    UndoInfo undo;
+    undo.move = move;
+    // Corner case: en passant move.
+    // But captured_piece == piece::None will not be an issue.
+    undo.captured_piece = piece_on_[move::to(move)];
+    undo.ep = ep_;
+    undo.castle_flags = castle_flags_;
+    undo.halfmove_clock = halfmove_clock_;
+    undo.hash = hash_;  // Needed for repetition detection for now
+    undo.checkers = checkers_;
+    undo.pinned = pinned_;
+    undos_.push_back(undo);
+}
+
+void Board::clear_ep() {
+    if (ep_ != file::None) {
+        hash_ ^= hash::ep[ep_];
+        ep_ = file::None;
+    }
+}
+
+void Board::make_turn() {
+    clear_ep();
+    halfmove_clock_++;
+    if (turn_ == color::Black) {
+        fullmove_cnt_++;
+    }
+}
+
+void Board::make_move_start(Move move) {
+    create_undo(move);
+    make_turn();
+}
+
+void Board::flip_piece(Color sd, Piece pc, Square sq) {
+    auto delta_bb = bb::from_sq(sq);
+    piece_bb_[pc] ^= delta_bb;
+    color_bb_[sd] ^= delta_bb;
+    hash_ ^= hash::piece[sd][pc][sq];
+}
+
+void Board::remove_piece(Color sd, Piece pc, Square sq) {
+    flip_piece(sd, pc, sq);
+    piece_on_[sq] = piece::None;
+    mg_material_ -= eval::mg_piece_value(sd, pc, sq);
+    eg_material_ -= eval::eg_piece_value(sd, pc, sq);
+    game_phase_ -= eval::piece_phase(pc);
+}
+
+void Board::add_piece(Color sd, Piece pc, Square sq) {
+    flip_piece(sd, pc, sq);
+    piece_on_[sq] = pc;
+    mg_material_ += eval::mg_piece_value(sd, pc, sq);
+    eg_material_ += eval::eg_piece_value(sd, pc, sq);
+    game_phase_ += eval::piece_phase(pc);
+}
+
+void Board::move_piece(Color sd, Piece pc, Square from, Square to) {
+    remove_piece(sd, pc, from);
+    add_piece(sd, pc, to);
+}
+
+void Board::move_from_piece() {
+    move_piece(turn_, mi_.from_pc, mi_.from, mi_.to);
+    if (mi_.from_pc == piece::Pawn || mi_.to_pc != piece::None) {
+        halfmove_clock_ = 0;
+    }
+}
+
+void Board::remove_to_piece() {
+    if (mi_.to_pc != piece::None) {
+        remove_piece(!turn_, mi_.to_pc, mi_.to);
+    }
+}
+
+bool Board::is_double_push() {
+    return mi_.from_pc == piece::Pawn && abs(mi_.to_rk - mi_.from_rk) == 2;
+}
+
+bool Board::is_ep() {
+    return mi_.from_pc == piece::Pawn && mi_.from_fl != mi_.to_fl &&
+           mi_.to_pc == piece::None;
+}
+
+void Board::set_ep(File fl) {
+    assert(ep_ == file::None);
+    ep_ = fl;
+    hash_ ^= hash::ep[fl];
+}
+
+// Handles board.ep (double push) and ep captures
+void Board::handle_eps() {
+    if (is_double_push()) {
+        auto ep_fl = square::file(mi_.from);
+        set_ep(ep_fl);
+    } else if (is_ep()) {
+        auto ep_sq = mi_.to ^ 8;
+        remove_piece(!turn_, piece::Pawn, ep_sq);
+    }
+}
+
+bool Board::is_promotion() {
+    return mi_.promotion != piece::None;
+}
+
+// Handles promotion to_pc
+void Board::handle_promotions() {
+    if (is_promotion()) {
+        remove_piece(turn_, piece::Pawn, mi_.to);
+        add_piece(turn_, mi_.promotion, mi_.to);
+    }
+}
+
+void Board::remove_castle_flags(CastleFlags cfs) {
+    hash_ ^= hash::castling[castle_flags_];
+    castle_flags_ &= ~cfs;
+    hash_ ^= hash::castling[castle_flags_];
+}
+
+void Board::handle_castle_flags() {
+    if (mi_.from_pc == piece::Rook) {
+        for (Castling c = 0; c < 4; c++) {
+            if (mi_.from == CASTLING_INFO[c].rook_from) {
+                remove_castle_flags(castle_flags::from_castling(c));
+            }
+        }
+    } else if (mi_.from_pc == piece::King) {
+        namespace cf = castle_flags;
+        auto cfs = turn_ == color::White ? cf::WhiteAll : cf::BlackAll;
+        remove_castle_flags(cfs);
+    }
+    for (Castling c = 0; c < 4; c++) {
+        if (mi_.to == CASTLING_INFO[c].rook_from) {
+            remove_castle_flags(castle_flags::from_castling(c));
+        }
+    }
+}
+
+bool Board::is_castle() {
+    return mi_.from_pc == piece::King && abs(mi_.to_fl - mi_.from_fl) == 2;
+}
+
+void Board::handle_castle_moves() {
+    if (is_castle()) {
+        for (Castling c = 0; c < 4; c++) {
+            if (mi_.to == CASTLING_INFO[c].king_to) {
+                auto rook_from = CASTLING_INFO[c].rook_from;
+                auto rook_to = CASTLING_INFO[c].rook_to;
+                move_piece(turn_, piece::Rook, rook_from, rook_to);
+            }
+        }
+    }
+}
+
+// Handles castling moves (king/rook moved / opp rook captured) and
+// castling moves (move rook)
+void Board::handle_castles() {
+    handle_castle_flags();
+    handle_castle_moves();
+}
+
+void Board::flip_turn() {
+    turn_ = !turn_;
+    hash_ ^= hash::side;
+}
+
+// sd: color of attackers
+Bitboard Board::pawn_attacks_from(Square sq, Color sd) {
+    using namespace dir;
+    auto sq_bb = bb::from_sq(sq);
+    auto sh = [this](Bitboard bb, Direction d) {
+        return bb::shift(bb, d, turn_);
+    };
+    return color_bb_[sd] & (sd == turn_ ? sh(sq_bb, SW) | sh(sq_bb, SE)
+                                        : sh(sq_bb, NW) | sh(sq_bb, NE));
+}
+
+Bitboard Board::attacks_from(Piece pc, Square sq) {
+    if (pc == piece::Pawn) {
+        return pawn_attacks_from(sq, color::White) |
+               pawn_attacks_from(sq, color::Black);
+    } else {
+        return lookup::attacks(pc, sq, all());
+    }
+}
+
+Bitboard Board::attackers_to(Square sq) {
+    auto all_atkrs = bb::Empty;
+#pragma GCC unroll 6
+    for (Piece pc = piece::Pawn; pc <= piece::King; pc++) {
+        all_atkrs |= attacks_from(pc, sq) & piece_bb_[pc];
+    }
+    all_atkrs &= all();
+    return all_atkrs;
+}
+
+void Board::update_checkers() {
+    checkers_ = attackers_to(king_sq(turn_)) & color_bb_[!turn_];
+}
+
+Bitboard Board::bishop_likes() {
+    return piece_bb_[piece::Bishop] | piece_bb_[piece::Queen];
+}
+
+Bitboard Board::rook_likes() {
+    return piece_bb_[piece::Rook] | piece_bb_[piece::Queen];
+}
+
+void Board::update_pinned() {
+    pinned_ = bb::Empty;
+    auto ksq = king_sq(turn_);
+    auto xrays = lookup::attacks(piece::Bishop, ksq) & bishop_likes() |
+                 lookup::attacks(piece::Rook, ksq) & rook_likes();
+    xrays &= color_bb_[!turn_];
+    auto occ = all() ^ xrays;
+    while (xrays) {
+        auto xray = bb::next_sq(xrays);
+        auto bb = lookup::in_between(ksq, xray) & occ;
+        if (bb::popcnt(bb) == 1) {
+            pinned_ |= bb;  // might repeat same sq
+        }
+    }
+}
+
+void Board::update_infos() {
+    update_checkers();
+    update_pinned();
+}
+
 bool Board::is_undo_castle() {
-    return mi.to_pc == piece::King && abs(mi.to_fl - mi.from_fl) == 2;
+    return mi_.to_pc == piece::King && abs(mi_.to_fl - mi_.from_fl) == 2;
 }
 
 void Board::undo_castles() {
     if (is_undo_castle()) {
         for (Castling c = 0; c < 4; c++) {
-            if (mi.to == CASTLING_INFO[c].king_to) {
+            if (mi_.to == CASTLING_INFO[c].king_to) {
                 auto rook_from = CASTLING_INFO[c].rook_from;
                 auto rook_to = CASTLING_INFO[c].rook_to;
-                move_piece(turn, piece::Rook, rook_to, rook_from);
+                move_piece(turn_, piece::Rook, rook_to, rook_from);
             }
         }
     }
@@ -320,32 +499,32 @@ bool Board::is_undo_promotion() {
 
 void Board::undo_promotions() {
     if (is_undo_promotion()) {
-        remove_piece(turn, mi.promotion, mi.to);
-        add_piece(turn, piece::Pawn, mi.to);
-        mi.to_pc = piece::Pawn;
+        remove_piece(turn_, mi_.promotion, mi_.to);
+        add_piece(turn_, piece::Pawn, mi_.to);
+        mi_.to_pc = piece::Pawn;
     }
 }
 
 bool Board::is_undo_ep(Piece captured) {
-    return mi.to_pc == piece::Pawn && mi.from_fl != mi.to_fl &&
+    return mi_.to_pc == piece::Pawn && mi_.from_fl != mi_.to_fl &&
            captured == piece::None;
 }
 
 void Board::undo_eps(Piece captured) {
     if (is_undo_ep(captured)) {
-        auto ep_sq = mi.to ^ 8;
-        add_piece(!turn, piece::Pawn, ep_sq);
+        auto ep_sq = mi_.to ^ 8;
+        add_piece(!turn_, piece::Pawn, ep_sq);
     }
 }
 
 void Board::add_to_piece(Piece captured) {
     if (captured != piece::None) {
-        add_piece(!turn, captured, mi.to);
+        add_piece(!turn_, captured, mi_.to);
     }
 }
 
 void Board::undo_move_from_piece() {
-    move_piece(turn, mi.to_pc, mi.to, mi.from);
+    move_piece(turn_, mi_.to_pc, mi_.to, mi_.from);
 }
 
 void Board::unmake_move_main(UndoInfo &undo) {
@@ -372,74 +551,42 @@ void Board::restore_castle_flags(CastleFlags cfs) {
 void Board::unmake_move_end(UndoInfo &undo) {
     restore_ep(undo.ep);
     restore_castle_flags(undo.castle_flags);
-    halfmove_clock = undo.halfmove_clock;
-    if (turn == color::Black) {
-        fullmove_cnt--;
+    halfmove_clock_ = undo.halfmove_clock;
+    if (turn_ == color::Black) {
+        fullmove_cnt_--;
     }
-    assert(hash == undo.hash);
-    checkers = undo.checkers;
-    pinned = undo.pinned;
-}
-
-void Board::unmake_move() {
-    auto &undo = undos.back();
-    flip_turn();
-    unmake_move_main(undo);
-    unmake_move_end(undo);
-    undos.pop_back();
-}
-
-void Board::unmake_null_move() {
-    auto &undo = undos.back();
-    flip_turn();
-    restore_ep(undo.ep);
-    halfmove_clock = undo.halfmove_clock;
-    if (turn == color::Black) {
-        fullmove_cnt--;
-    }
-    assert(hash == undo.hash);
-    checkers = undo.checkers;
-    pinned = undo.pinned;
-    undos.pop_back();
+    assert(hash_ == undo.hash);
+    checkers_ = undo.checkers;
+    pinned_ = undo.pinned;
 }
 
 Bitboard Board::rank_8() {
-    return turn == color::White ? bb::RANK_8 : bb::RANK_1;
-}
-
-Bitboard Board::single_pushes(Bitboard pawns) {
-    return bb::shift(pawns, dir::N, turn) & ~all();
+    return turn_ == color::White ? bb::RANK_8 : bb::RANK_1;
 }
 
 Bitboard Board::rank_2() {
-    return turn == color::White ? bb::RANK_2 : bb::RANK_7;
-}
-
-Bitboard Board::double_pushes(Bitboard pawns) {
-    pawns &= rank_2();
-    auto tos = bb::shift(pawns, dir::N, turn) & ~all();
-    return bb::shift(tos, dir::N, turn) & ~all();
+    return turn_ == color::White ? bb::RANK_2 : bb::RANK_7;
 }
 
 Bitboard Board::pawn_attacks(Bitboard pawns) {
-    return bb::shift(pawns, dir::NW, turn) | bb::shift(pawns, dir::NE, turn);
+    return bb::shift(pawns, dir::NW, turn_) | bb::shift(pawns, dir::NE, turn_);
 }
 
 bool Board::is_pseudo_legal_attack() {
-    auto from_bb = bb::from_sq(mi.from);
-    auto to_bb = bb::from_sq(mi.to);
-    if (mi.from_pc == piece::Pawn) {
+    auto from_bb = bb::from_sq(mi_.from);
+    auto to_bb = bb::from_sq(mi_.to);
+    if (mi_.from_pc == piece::Pawn) {
         if ((rank_8() & to_bb) != bb::Empty) {
             return false;
         }
         // There should not be any ep move at this point
         if ((single_pushes(from_bb) & to_bb) == bb::Empty &&
             (double_pushes(from_bb) & to_bb) == bb::Empty &&
-            (pawn_attacks(from_bb) & color_bb[!turn] & to_bb) == bb::Empty) {
+            (pawn_attacks(from_bb) & color_bb_[!turn_] & to_bb) == bb::Empty) {
             return false;
         }
     } else {
-        auto atks = lookup::attacks(mi.from_pc, mi.from, all());
+        auto atks = lookup::attacks(mi_.from_pc, mi_.from, all());
         if ((atks & to_bb) == bb::Empty) {
             return false;
         }
@@ -447,41 +594,16 @@ bool Board::is_pseudo_legal_attack() {
     return true;
 }
 
-Bitboard Board::evasion_mask() {
-    auto checker = bb::top_sq(checkers);
-    auto ksq = bb::top_sq(bb(piece::King, turn));
-    return lookup::in_between(checker, ksq) | checkers;
-}
-
 bool Board::is_pseudo_legal_evasion() {
     // We will handle king evasions later in is_legal
-    if (mi.from_pc == piece::King) {
+    if (mi_.from_pc == piece::King) {
         return true;
     }
-    if (bb::popcnt(checkers) >= 2) {
+    if (bb::popcnt(checkers_) >= 2) {
         return false;
     }
-    auto to_bb = bb::from_sq(mi.to);
+    auto to_bb = bb::from_sq(mi_.to);
     return (to_bb & evasion_mask()) != bb::Empty;
-}
-
-// Test if TT move is valid
-// Assumes the move is one that can be generated by MoveGenerator
-bool Board::is_pseudo_legal(Move move) {
-    update_moveinfo(move);
-    if (is_ep() || is_promotion() || is_castle()) {
-        return movegen::is_legal_move(*this, move);
-    }
-    auto from_bb = bb::from_sq(mi.from);
-    auto to_bb = bb::from_sq(mi.to);
-    if ((color_bb[turn] & from_bb) == bb::Empty ||
-        (color_bb[turn] & to_bb) != bb::Empty) {
-        return false;
-    }
-    if (!is_pseudo_legal_attack()) {
-        return false;
-    }
-    return checkers == bb::Empty || is_pseudo_legal_evasion();
 }
 
 bool Board::is_attacked(Square sq, Bitboard attackers_mask) {
@@ -489,14 +611,14 @@ bool Board::is_attacked(Square sq, Bitboard attackers_mask) {
 }
 
 bool Board::king_to_is_attacked(Square ksq) {
-    remove_piece(turn, piece::King, ksq);
-    auto atkd = is_attacked(mi.to, color_bb[!turn]);
-    add_piece(turn, piece::King, ksq);
+    remove_piece(turn_, piece::King, ksq);
+    auto atkd = is_attacked(mi_.to, color_bb_[!turn_]);
+    add_piece(turn_, piece::King, ksq);
     return atkd;
 }
 
 bool Board::castling_possible(Castling c) {
-    return castle_flags & castle_flags::from_castling(c);
+    return castle_flags_ & castle_flags::from_castling(c);
 }
 
 bool Board::is_legal_castle(Castling c, const CastlingInfo &ci) {
@@ -507,14 +629,14 @@ bool Board::is_legal_castle(Castling c, const CastlingInfo &ci) {
     if ((ib & all()) != bb::Empty) {
         return false;
     }
-    auto ib_sq = bb::top_sq(lookup::in_between(mi.from, mi.to));
-    return !is_attacked(ib_sq, color_bb[!turn]);
+    auto ib_sq = bb::top_sq(lookup::in_between(mi_.from, mi_.to));
+    return !is_attacked(ib_sq, color_bb_[!turn_]);
 }
 
 bool Board::is_legal_castle() {
     for (Castling c = 0; c < 4; c++) {
         auto &ci = CASTLING_INFO[c];
-        if (mi.from == ci.king_from && mi.to == ci.king_to) {
+        if (mi_.from == ci.king_from && mi_.to == ci.king_to) {
             return is_legal_castle(c, ci);
         }
     }
@@ -522,7 +644,7 @@ bool Board::is_legal_castle() {
 }
 
 bool Board::is_pinned() {
-    return (pinned & bb::from_sq(mi.from)) != bb::Empty;
+    return (pinned_ & bb::from_sq(mi_.from)) != bb::Empty;
 }
 
 bool Board::is_on_line(Square s0, Square s1, Square s2) {
@@ -548,41 +670,20 @@ bool Board::is_on_line(Square s0, Square s1, Square s2) {
 }
 
 bool Board::is_legal_ep(Square ksq) {
-    auto ep = mi.to ^ 8;
-    move_piece(turn, piece::Pawn, mi.from, mi.to);
-    remove_piece(!turn, piece::Pawn, ep);
-    auto atkd = is_attacked(ksq, color_bb[!turn]);
-    add_piece(!turn, piece::Pawn, ep);
-    move_piece(turn, piece::Pawn, mi.to, mi.from);
+    auto ep = mi_.to ^ 8;
+    move_piece(turn_, piece::Pawn, mi_.from, mi_.to);
+    remove_piece(!turn_, piece::Pawn, ep);
+    auto atkd = is_attacked(ksq, color_bb_[!turn_]);
+    add_piece(!turn_, piece::Pawn, ep);
+    move_piece(turn_, piece::Pawn, mi_.to, mi_.from);
     return !atkd;
 }
 
-bool Board::is_legal(Move move) {
-    update_moveinfo(move);
-    auto ksq = bb::top_sq(bb(piece::King, turn));
-    if (mi.from == ksq) {
-        if (king_to_is_attacked(ksq)) {
-            return false;
-        }
-        if (!is_legal_castle()) {
-            return false;
-        }
-        return true;
-    }
-    if (is_pinned() && !is_on_line(ksq, mi.from, mi.to)) {
-        return false;
-    }
-    if (is_ep()) {
-        return is_legal_ep(ksq);
-    }
-    return true;
-}
-
 void Board::setup_fen_pieces(std::istringstream &iss) {
-    for (auto &pc_bb : piece_bb) {
+    for (auto &pc_bb : piece_bb_) {
         pc_bb = bb::Empty;
     }
-    for (auto &cr_bb : color_bb) {
+    for (auto &cr_bb : color_bb_) {
         cr_bb = bb::Empty;
     }
     for (Rank rk = rank::_8; rk >= rank::_1; rk--) {
@@ -608,7 +709,7 @@ void Board::setup_fen_pieces(std::istringstream &iss) {
 }
 
 void Board::setup_fen_turn(std::istringstream &iss) {
-    turn = color::White;
+    turn_ = color::White;
     std::string turn;
     iss >> turn;
     if (turn == "b") {
@@ -617,15 +718,15 @@ void Board::setup_fen_turn(std::istringstream &iss) {
 }
 
 void Board::add_castle_flags(CastleFlags cfs) {
-    hash ^= hash::castling[castle_flags];
-    castle_flags |= cfs;
-    hash ^= hash::castling[castle_flags];
+    hash_ ^= hash::castling[castle_flags_];
+    castle_flags_ |= cfs;
+    hash_ ^= hash::castling[castle_flags_];
 }
 
 void Board::setup_fen_castle_flags(std::istringstream &iss) {
     std::string cfs_str;
     iss >> cfs_str;
-    castle_flags = castle_flags::None;
+    castle_flags_ = castle_flags::None;
     for (auto ch : cfs_str) {
         for (Castling c = 0; c < 4; c++) {
             if (ch == CASTLING_FEN[c]) {
@@ -638,7 +739,7 @@ void Board::setup_fen_castle_flags(std::istringstream &iss) {
 void Board::setup_fen_ep(std::istringstream &iss) {
     std::string ep_str;
     iss >> ep_str;
-    ep = file::None;
+    ep_ = file::None;
     if (ep_str != "-") {
         auto sq = square::from_str(ep_str);
         auto fl = square::file(sq);
@@ -649,67 +750,29 @@ void Board::setup_fen_ep(std::istringstream &iss) {
 void Board::setup_fen_halfmove_clock(std::istringstream &iss) {
     i32 hmc;
     iss >> hmc;
-    halfmove_clock = hmc;
+    halfmove_clock_ = hmc;
 }
 
 void Board::setup_fen_fullmove_cnt(std::istringstream &iss) {
     i32 fmc;
     iss >> fmc;
-    fullmove_cnt = fmc;
-}
-
-void Board::setup_fen(std::string fen) {
-    std::istringstream iss(fen);
-    std::fill(piece_on.begin(), piece_on.end(), piece::None);
-    hash = hash::Empty;
-    mg_material = 0;
-    eg_material = 0;
-    game_phase = 0;
-    setup_fen_pieces(iss);
-    setup_fen_turn(iss);
-    setup_fen_castle_flags(iss);
-    setup_fen_ep(iss);
-    setup_fen_halfmove_clock(iss);
-    setup_fen_fullmove_cnt(iss);
-    undos.clear();
-    update_infos();
-}
-
-void Board::setup(PositionCmd cmd) {
-    if (cmd.type == PositionCmd::Startpos) {
-        cmd.fen = STARTPOS_FEN;
-    }
-    setup_fen(cmd.fen);
-    for (auto move : cmd.moves) {
-        make_move(move);
-    }
-}
-
-bool Board::in_check() {
-    return checkers != bb::Empty;
+    fullmove_cnt_ = fmc;
 }
 
 bool Board::has_legal_move() {
     return movegen::has_legal_move(*this);
 }
 
-bool Board::is_capture(Move move) {
-    update_moveinfo(move);
-    // Captures + queen promotions (same as movegen captures)
-    return mi.promotion == piece::Queen ||
-           (all() & bb::from_sq(mi.to)) != bb::Empty || is_ep();
-}
-
 bool Board::is_fifty_move_draw() {
-    return halfmove_clock >= 100 && (!in_check() || has_legal_move());
+    return halfmove_clock_ >= 100 && (!in_check() || has_legal_move());
 }
 
 i32 Board::repetition_count() {
     auto reps = 0;
-    auto n = undos.size();
-    auto mx = std::min(n, static_cast<size_t>(halfmove_clock));
+    auto n = undos_.size();
+    auto mx = std::min(n, static_cast<size_t>(halfmove_clock_));
     for (auto i = 4; i <= mx; i += 2) {
-        if (hash == undos[n - i].hash) {
+        if (hash_ == undos_[n - i].hash) {
             reps++;
         }
     }
@@ -720,41 +783,14 @@ bool Board::is_repetition_draw() {
     return repetition_count() >= 2;
 }
 
-// Does not detect stalemate
-bool Board::is_draw() {
-    return is_fifty_move_draw() || is_repetition_draw();
-}
-
 Piece Board::color_on(Square sq) {
-    return color_bb[color::White] & bb::from_sq(sq) ? color::White
-                                                    : color::Black;
+    return color_bb_[color::White] & bb::from_sq(sq) ? color::White
+                                                     : color::Black;
 }
 
 char Board::debug_char(Square sq) {
-    auto pc_char = piece::to_char(piece_on[sq]);
+    auto pc_char = piece::to_char(piece_on_[sq]);
     return color_on(sq) == color::White ? toupper(pc_char) : pc_char;
-}
-
-std::string Board::debug_str() {
-    std::string s;
-    for (Rank rk = rank::_8; rk >= rank::_1; rk--) {
-        for (File fl = file::A; fl <= file::H; fl++) {
-            auto sq = square::init(rk, fl);
-            s += debug_char(sq);
-        }
-        s += '\n';
-    }
-    s += std::format("turn: {}\n", color::debug_str(turn));
-    s += std::format("ep: {}\n", file::debug_str(ep));
-    s += std::format("castle_flags: {}\n",
-                     castle_flags::debug_str(castle_flags));
-    s += std::format("halfmove_clock: {}\n", halfmove_clock);
-    s += std::format("fullmove_cnt: {}\n", fullmove_cnt);
-    s += std::format("hash: 0x{:016x}\n", hash);
-    s += std::format("undos: size() = {}\n", undos.size());
-    s += std::format("checkers:\n{}\n", bb::debug_str(checkers));
-    s += std::format("pinned:\n{}", bb::debug_str(pinned));
-    return s;
 }
 
 }  // namespace tuna::board

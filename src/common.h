@@ -10,7 +10,9 @@
 #include <string>
 #include <string_view>
 
-#define TODO abort()
+[[noreturn]] inline void todo() {
+    std::abort();
+}
 
 namespace tuna {
 

@@ -151,12 +151,12 @@ i32 piece_phase(Piece pc) {
 }
 
 Score evaluate(Board &board) {
-    auto mg_phase = std::min(board.game_phase, 24);
+    auto mg_phase = std::min(board.game_phase(), 24);
     auto eg_phase = 24 - mg_phase;
-    auto mg_material = board.mg_material;
-    auto eg_material = board.eg_material;
+    auto mg_material = board.mg_material();
+    auto eg_material = board.eg_material();
     auto material = (mg_material * mg_phase + eg_material * eg_phase) / 24;
-    return score::side_score(material, board.turn);
+    return score::side_score(material, board.turn());
 }
 
 }  // namespace tuna::eval
