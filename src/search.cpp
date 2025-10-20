@@ -445,18 +445,6 @@ void Searcher::aspiration_window(Depth depth) {
     }
 }
 
-bool Searcher::can_search_next_depth() {
-    // Not enough data to calculate branching factor
-    if (iter_depth_ == 1) {
-        depth_one_node_cnt_ = node_cnt_;
-        return true;
-    }
-    auto base = static_cast<f64>(node_cnt_) / depth_one_node_cnt_;
-    auto exp = 1.0 / (iter_depth_ - 1);
-    auto branching_factor = pow(base, exp);
-    return within_time_limit(elapsed() * branching_factor);
-}
-
 std::string Searcher::pv_str() const {
     std::string pv_str;
     auto &pv_line = stk_[0].pv_line;
@@ -484,6 +472,18 @@ void Searcher::print_info() const {
 void Searcher::update_bestmove() {
     assert(!stop_requested_ && !stk_[0].pv_line.empty());
     bestmove_ = stk_[0].pv_line[0];
+}
+
+bool Searcher::can_search_next_depth() {
+    // Not enough data to calculate branching factor
+    if (iter_depth_ == 1) {
+        depth_one_node_cnt_ = node_cnt_;
+        return true;
+    }
+    auto base = static_cast<f64>(node_cnt_) / depth_one_node_cnt_;
+    auto exp = 1.0 / (iter_depth_ - 1);
+    auto branching_factor = pow(base, exp);
+    return within_time_limit(elapsed() * branching_factor);
 }
 
 void Searcher::iterative_deepening() {

@@ -22,11 +22,8 @@ const auto FILE_AB = FILE_A | FILE_B;
 const auto FILE_GH = FILE_G | FILE_H;
 
 Bitboard from_sq(Square sq);
-
 Square top_sq(Bitboard bb);
-
 Square next_sq(Bitboard &bb);
-
 i32 popcnt(Bitboard bb);
 
 inline __attribute__((always_inline)) Bitboard shift(Bitboard bb, Direction d,
@@ -70,7 +67,6 @@ inline __attribute__((always_inline)) Bitboard shift(Bitboard bb, Direction d,
 }
 
 char debug_char(Bitboard bb, Square sq);
-
 std::string debug_str(Bitboard bb);
 
 }  // namespace tuna::bb

@@ -56,13 +56,10 @@ public:
     class Iterator {
     public:
         Iterator(MovePicker &mp);
-
         Iterator(MovePicker &mp, bool is_end);
 
         Move operator*() const;
-
         Iterator &operator++();
-
         bool operator==(const Iterator &rhs) const;
 
     private:
@@ -75,18 +72,15 @@ public:
                ButterflyHistory &butterfly_hist);
 
     Iterator begin();
-
     Iterator end();
 
     void skip_quiet_moves();
 
 private:
     MoveScore mvv_lva(Move move) const;
-
     MoveScore history_score(Move move) const;
 
     MoveScore score_move(movegen::Type type, Move move) const;
-
     void sort_moves(movegen::Type type);
 
     void init_killers();
@@ -96,11 +90,8 @@ private:
     bool is_fully_legal(Move move) const;
 
     Move next_killer();
-
     bool is_repeated_move(Move move) const;
-
     Move retrieve_next();
-
     Move next();
 
     Board &board_;

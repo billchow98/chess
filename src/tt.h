@@ -58,7 +58,6 @@ public:
     Tt();
 
     void clear();
-
     void resize(u64 mb);
 
     Entry &find(Hash hash);
@@ -67,13 +66,10 @@ public:
 
 private:
     void init_buckets();
-
     void set_power_two_size(u64 mb);
-
     void init(u64 mb = 16);
 
     i32 hash_index(Hash hash) const;
-
     Bucket &get_bucket(Hash hash);
 
     std::vector<Bucket> buckets_;

@@ -444,16 +444,16 @@ Bitboard Board::attackers_to(Square sq) const {
     return all_atkrs;
 }
 
-void Board::update_checkers() {
-    checkers_ = attackers_to(king_sq(turn_)) & color_bb_[!turn_];
-}
-
 Bitboard Board::bishop_likes() const {
     return piece_bb_[piece::Bishop] | piece_bb_[piece::Queen];
 }
 
 Bitboard Board::rook_likes() const {
     return piece_bb_[piece::Rook] | piece_bb_[piece::Queen];
+}
+
+void Board::update_checkers() {
+    checkers_ = attackers_to(king_sq(turn_)) & color_bb_[!turn_];
 }
 
 void Board::update_pinned() {
