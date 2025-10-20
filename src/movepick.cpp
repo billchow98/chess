@@ -14,10 +14,11 @@ bool ScoredMove::operator<(const ScoredMove &rhs) const {
 }
 
 MovePicker::Iterator::Iterator(MovePicker &mp) : mp_(mp), move_(mp.next()) {}
+
 MovePicker::Iterator::Iterator(MovePicker &mp, bool is_end)
     : mp_(mp), move_(move::Null) {}
 
-Move MovePicker::Iterator::operator*() {
+Move MovePicker::Iterator::operator*() const {
     return move_;
 }
 
@@ -26,7 +27,7 @@ MovePicker::Iterator &MovePicker::Iterator::operator++() {
     return *this;
 }
 
-bool MovePicker::Iterator::operator==(MovePicker::Iterator &rhs) {
+bool MovePicker::Iterator::operator==(const MovePicker::Iterator &rhs) const {
     return &mp_ == &rhs.mp_ && move_ == rhs.move_;
 }
 
@@ -55,7 +56,7 @@ void MovePicker::skip_quiet_moves() {
     skip_quiets_ = true;
 }
 
-MoveScore MovePicker::mvv_lva(Move move) {
+MoveScore MovePicker::mvv_lva(Move move) const {
     auto lva = board_.piece_on(move::from(move));
     auto mvv = board_.piece_on(move::to(move));
     auto promotion = move::promotion(move);
@@ -75,14 +76,14 @@ MoveScore MovePicker::mvv_lva(Move move) {
     return 6 * mvv - lva;
 }
 
-MoveScore MovePicker::history_score(Move move) {
+MoveScore MovePicker::history_score(Move move) const {
     auto sd = board_.turn();
     auto from = move::from(move);
     auto to = move::to(move);
     return butterfly_hist_[sd][from][to];
 }
 
-MoveScore MovePicker::score_move(movegen::Type type, Move move) {
+MoveScore MovePicker::score_move(movegen::Type type, Move move) const {
     switch (type) {
     case movegen::Evasions:
         return board_.is_capture(move) ? mvv_lva(move) + 2 * HISTORY_MAX
@@ -117,7 +118,7 @@ void MovePicker::generate(movegen::Type type) {
     stage_++;
 }
 
-bool MovePicker::is_fully_legal(Move move) {
+bool MovePicker::is_fully_legal(Move move) const {
     return move != move::Null && board_.is_pseudo_legal(move) &&
            board_.is_legal(move);
 }
@@ -132,7 +133,7 @@ Move MovePicker::next_killer() {
     return move::Null;
 }
 
-bool MovePicker::is_repeated_move(Move move) {
+bool MovePicker::is_repeated_move(Move move) const {
     return move == tt_move_ ||
            std::find(killers_.begin(), killers_.end(), move) != killers_.end();
 }

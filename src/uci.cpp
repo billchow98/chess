@@ -27,7 +27,7 @@ std::string to_str(UciOptionType ot) {
 }
 
 struct Option {
-    std::string to_str() {
+    std::string to_str() const {
         std::string s;
         s += std::format("option name {} type {}", name,
                          uci_option::to_str(type));

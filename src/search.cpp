@@ -84,7 +84,7 @@ void Searcher::reset_info() {
     stk_.resize(cur_ply_ + 1);
 }
 
-Millis Searcher::elapsed() {
+Millis Searcher::elapsed() const {
     auto clock_end = clock::now();
     Millis elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                          clock_end - clock_start_)
@@ -92,7 +92,7 @@ Millis Searcher::elapsed() {
     return elapsed != 0 ? elapsed : 1;
 }
 
-bool Searcher::within_time_limit(Millis millis) {
+bool Searcher::within_time_limit(Millis millis) const {
     return millis + cfg::UCI_LATENCY_MS < max_millis_;
 }
 
@@ -182,15 +182,15 @@ Score Searcher::qsearch(Score alpha, Score beta) {
 }
 
 // Reverse futility pruning
-bool Searcher::can_rfp(bool is_pv_node, Depth depth) {
+bool Searcher::can_rfp(bool is_pv_node, Depth depth) const {
     return !is_pv_node && depth <= 6 && !board_.in_check();
 }
 
-Score Searcher::rfp_margin(Depth depth) {
+Score Searcher::rfp_margin(Depth depth) const {
     return 75 * depth;
 }
 
-bool Searcher::material_can_nmp() {
+bool Searcher::material_can_nmp() const {
     // Current side has king and >= 2 piece. We have to skip NMP if
     // we have no more pieces (high chance of zugzwang)
     auto pc_cnt = bb::popcnt(board_.color_bb(board_.turn()));
@@ -200,12 +200,13 @@ bool Searcher::material_can_nmp() {
 }
 
 // Null move pruning
-bool Searcher::can_nmp(bool is_pv_node, Depth depth, Score eval, Score beta) {
+bool Searcher::can_nmp(bool is_pv_node, Depth depth, Score eval,
+                       Score beta) const {
     return !is_pv_node && depth >= 2 && !board_.in_check() && eval >= beta &&
            material_can_nmp();
 }
 
-Depth Searcher::nmp_reduction(Depth depth) {
+Depth Searcher::nmp_reduction(Depth depth) const {
     return 2 + depth / 5;
 }
 
@@ -220,21 +221,21 @@ void Searcher::unmake_null_move() {
 }
 
 // Late move pruning
-bool Searcher::can_lmp(Depth depth, i32 moves_played) {
+bool Searcher::can_lmp(Depth depth, i32 moves_played) const {
     return depth <= 2 && moves_played >= 4 + 6 * depth;
 }
 
 // Extensions (currently only check extension)
-Depth Searcher::extension(bool gives_check) {
+Depth Searcher::extension(bool gives_check) const {
     return gives_check;
 }
 
 // Late move reductions
-bool Searcher::can_lmr(Depth depth) {
+bool Searcher::can_lmr(Depth depth) const {
     return depth >= 3;
 }
 
-Depth Searcher::lmr(Depth depth, i32 moves_played, bool is_pv_node) {
+Depth Searcher::lmr(Depth depth, i32 moves_played, bool is_pv_node) const {
     depth = std::min(depth, 63_i16);
     moves_played = std::min(moves_played, 63);
     auto red = LMR_REDUCTION[depth][moves_played];
@@ -259,12 +260,12 @@ void Searcher::update_killers(Move move) {
 
 // Butterfly history heuristic
 // i32 in case of overflow in extreme cases
-i32 Searcher::butterfly_history_bonus(Depth depth) {
+i32 Searcher::butterfly_history_bonus(Depth depth) const {
     return depth * depth;
 }
 
 // Need our own implementation to avoid stupid type mismatch issues
-HistoryScore Searcher::clamp_history_score(i32 bonus) {
+HistoryScore Searcher::clamp_history_score(i32 bonus) const {
     if (bonus < HISTORY_MIN) {
         return HISTORY_MIN;
     }
@@ -456,7 +457,7 @@ bool Searcher::can_search_next_depth() {
     return within_time_limit(elapsed() * branching_factor);
 }
 
-std::string Searcher::pv_str() {
+std::string Searcher::pv_str() const {
     std::string pv_str;
     auto &pv_line = stk_[0].pv_line;
     bool first = true;
@@ -470,7 +471,7 @@ std::string Searcher::pv_str() {
     return pv_str;
 }
 
-void Searcher::print_info() {
+void Searcher::print_info() const {
     assert(!stop_requested_);
     auto millis = elapsed();
     auto nps = static_cast<u64>(1000. * node_cnt_ / millis);
@@ -500,7 +501,7 @@ void Searcher::iterative_deepening() {
     }
 }
 
-void Searcher::print_bestmove() {
+void Searcher::print_bestmove() const {
     assert(bestmove_ != move::Null);
     io::println("bestmove {}", move::to_str(bestmove_));
 }

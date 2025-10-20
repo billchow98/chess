@@ -23,7 +23,7 @@ const auto KING_DIRS = std::array{
     dir::N, dir::NE, dir::E, dir::SE, dir::S, dir::SW, dir::W, dir::NW,
 };
 
-MoveGenerator::MoveGenerator(Board &board) : board_(board) {}
+MoveGenerator::MoveGenerator(const Board &board) : board_(board) {}
 
 // Pseudo-legal moves. We do not check for legal moves here.
 // It is up to the caller to decide when to call is_legal.
@@ -48,11 +48,11 @@ void MoveGenerator::generate(Type type) {
     generate_castlings(type);
 }
 
-const std::vector<Move> &MoveGenerator::moves() {
+const std::vector<Move> &MoveGenerator::moves() const {
     return moves_;
 }
 
-bool MoveGenerator::has_legal_move(Board &board) {
+bool MoveGenerator::has_legal_move(const Board &board) {
     MoveGenerator gen(board);
     gen.generate_all();
     filter_legal(gen);
@@ -61,7 +61,7 @@ bool MoveGenerator::has_legal_move(Board &board) {
 
 // Slower than Board::is_legal. Does not assume move is pseudo-legal first.
 // Used for TT move checking of special cases
-bool MoveGenerator::is_legal_move(Board &board, Move move) {
+bool MoveGenerator::is_legal_move(const Board &board, Move move) {
     MoveGenerator gen(board);
     gen.generate_all();
     auto &ms = gen.moves();
@@ -123,7 +123,7 @@ void MoveGenerator::update_boardinfo() {
     bi_.king_sq = board_.king_sq(board_.turn());
 }
 
-Bitboard MoveGenerator::get_to_mask(Type type) {
+Bitboard MoveGenerator::get_to_mask(Type type) const {
     switch (type) {
     case Evasions:
         if (board_.checkers_count() >= 2) {
@@ -144,11 +144,11 @@ void MoveGenerator::add(Square from, Square to, Piece promotion) {
     moves_.push_back(move::init(from, to, promotion));
 }
 
-Bitboard MoveGenerator::rank_8() {
+Bitboard MoveGenerator::rank_8() const {
     return board_.turn() == color::White ? bb::RANK_8 : bb::RANK_1;
 }
 
-Bitboard MoveGenerator::single_pushes() {
+Bitboard MoveGenerator::single_pushes() const {
     return board_.single_pushes(board_.bb(piece::Pawn, board_.turn()));
 }
 
@@ -160,7 +160,7 @@ void MoveGenerator::generate_single_pushes(Bitboard to_mask) {
     }
 }
 
-Bitboard MoveGenerator::double_pushes() {
+Bitboard MoveGenerator::double_pushes() const {
     return board_.double_pushes(board_.bb(piece::Pawn, board_.turn()));
 }
 
@@ -172,7 +172,8 @@ void MoveGenerator::generate_double_pushes(Bitboard to_mask) {
     }
 }
 
-Bitboard MoveGenerator::pawn_capture_to_mask(Type type, Bitboard to_mask) {
+Bitboard MoveGenerator::pawn_capture_to_mask(Type type,
+                                             Bitboard to_mask) const {
     assert(type != Quiets);
     auto theirs = board_.color_bb(!board_.turn());
     auto mask = theirs & to_mask;
@@ -187,7 +188,7 @@ Bitboard MoveGenerator::pawn_capture_to_mask(Type type, Bitboard to_mask) {
     return mask;
 }
 
-Bitboard MoveGenerator::quiet_promotion_tos(Bitboard to_mask) {
+Bitboard MoveGenerator::quiet_promotion_tos(Bitboard to_mask) const {
     return single_pushes() & rank_8() & to_mask;
 }
 
@@ -230,7 +231,7 @@ void MoveGenerator::generate_quiet_promotions(Type type, Bitboard to_mask) {
     generate_quiet_underpromotions(type, to_mask);
 }
 
-Bitboard MoveGenerator::pawn_captures(Direction d) {
+Bitboard MoveGenerator::pawn_captures(Direction d) const {
     auto pawns = board_.bb(piece::Pawn, board_.turn());
     // Do not & with color_bb[!turn] here. to_mask may contain ep square
     return bb::shift(pawns, d, board_.turn());
@@ -327,7 +328,7 @@ bool on_board(Square from, Direction d, i32 k = 1) {
     return true;
 }
 
-void check_pseudo_legal(std::unordered_set<Move> &moves, Board &board,
+void check_pseudo_legal(std::unordered_set<Move> &moves, const Board &board,
                         Square from, Square to, Piece promotion) {
     auto m = move::init(from, to, promotion);
     if (moves.contains(m) != board.is_pseudo_legal(m)) {
@@ -345,7 +346,7 @@ void check_pseudo_legal(std::unordered_set<Move> &moves, Board &board,
     }
 }
 
-void check_pseudo_legal(std::unordered_set<Move> &moves, Board &board,
+void check_pseudo_legal(std::unordered_set<Move> &moves, const Board &board,
                         Square from, Square to) {
     check_pseudo_legal(moves, board, from, to, piece::None);
     // Possible promotion

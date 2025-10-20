@@ -56,9 +56,9 @@ private:
 
     void reset_info();
 
-    Millis elapsed();
+    Millis elapsed() const;
 
-    bool within_time_limit(Millis millis);
+    bool within_time_limit(Millis millis) const;
 
     void check_limits_reached();
 
@@ -74,33 +74,33 @@ private:
 
     Score qsearch(Score alpha, Score beta);
 
-    bool can_rfp(bool is_pv_node, Depth depth);
+    bool can_rfp(bool is_pv_node, Depth depth) const;
 
-    Score rfp_margin(Depth depth);
+    Score rfp_margin(Depth depth) const;
 
-    bool material_can_nmp();
+    bool material_can_nmp() const;
 
-    bool can_nmp(bool is_pv_node, Depth depth, Score eval, Score beta);
+    bool can_nmp(bool is_pv_node, Depth depth, Score eval, Score beta) const;
 
-    Depth nmp_reduction(Depth depth);
+    Depth nmp_reduction(Depth depth) const;
 
     void make_null_move();
 
     void unmake_null_move();
 
-    bool can_lmp(Depth depth, i32 moves_played);
+    bool can_lmp(Depth depth, i32 moves_played) const;
 
-    Depth extension(bool gives_check);
+    Depth extension(bool gives_check) const;
 
-    bool can_lmr(Depth depth);
+    bool can_lmr(Depth depth) const;
 
-    Depth lmr(Depth depth, i32 moves_played, bool is_pv_node);
+    Depth lmr(Depth depth, i32 moves_played, bool is_pv_node) const;
 
     void update_killers(Move move);
 
-    i32 butterfly_history_bonus(Depth depth);
+    i32 butterfly_history_bonus(Depth depth) const;
 
-    HistoryScore clamp_history_score(i32 bonus);
+    HistoryScore clamp_history_score(i32 bonus) const;
 
     HistoryScore &get_butterfly_history(Move move);
 
@@ -118,15 +118,15 @@ private:
 
     bool can_search_next_depth();
 
-    std::string pv_str();
+    std::string pv_str() const;
 
-    void print_info();
+    void print_info() const;
 
     void update_bestmove();
 
     void iterative_deepening();
 
-    void print_bestmove();
+    void print_bestmove() const;
 
     Board &board_;
     std::chrono::time_point<clock> clock_start_;

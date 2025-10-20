@@ -59,11 +59,11 @@ public:
 
         Iterator(MovePicker &mp, bool is_end);
 
-        Move operator*();
+        Move operator*() const;
 
         Iterator &operator++();
 
-        bool operator==(Iterator &rhs);
+        bool operator==(const Iterator &rhs) const;
 
     private:
         MovePicker &mp_;
@@ -81,11 +81,11 @@ public:
     void skip_quiet_moves();
 
 private:
-    MoveScore mvv_lva(Move move);
+    MoveScore mvv_lva(Move move) const;
 
-    MoveScore history_score(Move move);
+    MoveScore history_score(Move move) const;
 
-    MoveScore score_move(movegen::Type type, Move move);
+    MoveScore score_move(movegen::Type type, Move move) const;
 
     void sort_moves(movegen::Type type);
 
@@ -93,11 +93,11 @@ private:
 
     void generate(movegen::Type type);
 
-    bool is_fully_legal(Move move);
+    bool is_fully_legal(Move move) const;
 
     Move next_killer();
 
-    bool is_repeated_move(Move move);
+    bool is_repeated_move(Move move) const;
 
     Move retrieve_next();
 

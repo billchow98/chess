@@ -15,11 +15,11 @@ void Entry::invalidate() {
     hash_ = 0;
 }
 
-bool Entry::is_valid() {
+bool Entry::is_valid() const {
     return hash_ != 0;
 }
 
-Score Entry::search_score(Ply ply) {
+Score Entry::search_score(Ply ply) const {
     if (score::is_mate(score_)) {
         auto depth = score::mate_distance(score_);
         auto mate_ply = depth + ply;
@@ -43,23 +43,23 @@ void Entry::update(Hash hash, Move move, Score score, Ply depth, Bound bound,
     }
 }
 
-u32 Entry::hash() {
+u32 Entry::hash() const {
     return hash_;
 }
 
-Move Entry::move() {
+Move Entry::move() const {
     return move_;
 }
 
-Ply Entry::depth() {
+Ply Entry::depth() const {
     return depth_;
 }
 
-Bound Entry::bound() {
+Bound Entry::bound() const {
     return bound_;
 }
 
-Score Entry::to_tt_score(Score score, Ply ply) {
+Score Entry::to_tt_score(Score score, Ply ply) const {
     if (score::is_mate(score)) {
         auto mate_ply = score::mate_distance(score);
         auto depth = mate_ply - ply;
@@ -97,7 +97,7 @@ Entry &Tt::find(Hash hash) {
     return *entry;
 }
 
-i32 Tt::hashfull() {
+i32 Tt::hashfull() const {
     i32 cnt = 0;
     for (auto i = 0; i < 1000; i++) {
         for (auto e : buckets_[i].entries) {
@@ -121,7 +121,7 @@ void Tt::init(u64 mb) {
     init_buckets();
 }
 
-i32 Tt::hash_index(Hash hash) {
+i32 Tt::hash_index(Hash hash) const {
     // Must use & because compiler doesn't know size is always
     // a power of 2
     return hash >> 32 & size_ - 1;

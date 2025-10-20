@@ -54,13 +54,13 @@ public:
 
     void setup_fen(std::string fen);
 
-    std::string debug_str();
+    std::string debug_str() const;
 
-    Bitboard bb(Piece pc, Color cr);
+    Bitboard bb(Piece pc, Color cr) const;
 
-    Bitboard all();
+    Bitboard all() const;
 
-    Square king_sq(Color sd);
+    Square king_sq(Color sd) const;
 
     void make_move(Move move);
 
@@ -70,42 +70,42 @@ public:
 
     void unmake_null_move();
 
-    Bitboard single_pushes(Bitboard pawns);
+    Bitboard single_pushes(Bitboard pawns) const;
 
-    Bitboard double_pushes(Bitboard pawns);
+    Bitboard double_pushes(Bitboard pawns) const;
 
-    Bitboard evasion_mask();
+    Bitboard evasion_mask() const;
 
-    bool is_pseudo_legal(Move move);
+    bool is_pseudo_legal(Move move) const;
 
-    bool is_legal(Move move);
+    bool is_legal(Move move) const;
 
-    bool in_check();
+    bool in_check() const;
 
-    bool is_capture(Move move);
+    bool is_capture(Move move) const;
 
-    bool is_draw();
+    bool is_draw() const;
 
-    Bitboard color_bb(Color sd);
+    Bitboard color_bb(Color sd) const;
 
-    Piece piece_on(Square sq);
+    Piece piece_on(Square sq) const;
 
-    Color turn();
+    Color turn() const;
 
-    File ep();
+    File ep() const;
 
-    Hash hash();
+    Hash hash() const;
 
-    i32 checkers_count();
+    i32 checkers_count() const;
 
-    Score mg_material();  // material always from white's perspective
+    Score mg_material() const;  // material always from white's perspective
 
-    Score eg_material();  // material always from white's perspective
+    Score eg_material() const;  // material always from white's perspective
 
-    i32 game_phase();
+    i32 game_phase() const;
 
 private:
-    void update_moveinfo(Move move);
+    void update_moveinfo(Move move) const;
 
     void create_undo(Move move);
 
@@ -127,15 +127,15 @@ private:
 
     void remove_to_piece();
 
-    bool is_double_push();
+    bool is_double_push() const;
 
-    bool is_ep();
+    bool is_ep() const;
 
     void set_ep(File fl);
 
     void handle_eps();
 
-    bool is_promotion();
+    bool is_promotion() const;
 
     void handle_promotions();
 
@@ -143,7 +143,7 @@ private:
 
     void handle_castle_flags();
 
-    bool is_castle();
+    bool is_castle() const;
 
     void handle_castle_moves();
 
@@ -151,31 +151,31 @@ private:
 
     void flip_turn();
 
-    Bitboard pawn_attacks_from(Square sq, Color sd);
+    Bitboard pawn_attacks_from(Square sq, Color sd) const;
 
-    Bitboard attacks_from(Piece pc, Square sq);
+    Bitboard attacks_from(Piece pc, Square sq) const;
 
-    Bitboard attackers_to(Square sq);
+    Bitboard attackers_to(Square sq) const;
 
     void update_checkers();
 
-    Bitboard bishop_likes();
+    Bitboard bishop_likes() const;
 
-    Bitboard rook_likes();
+    Bitboard rook_likes() const;
 
     void update_pinned();
 
     void update_infos();
 
-    bool is_undo_castle();
+    bool is_undo_castle() const;
 
     void undo_castles();
 
-    bool is_undo_promotion();
+    bool is_undo_promotion() const;
 
     void undo_promotions();
 
-    bool is_undo_ep(Piece captured);
+    bool is_undo_ep(Piece captured) const;
 
     void undo_eps(Piece captured);
 
@@ -191,31 +191,31 @@ private:
 
     void unmake_move_end(UndoInfo &undo);
 
-    Bitboard rank_8();
+    Bitboard rank_8() const;
 
-    Bitboard rank_2();
+    Bitboard rank_2() const;
 
-    Bitboard pawn_attacks(Bitboard pawns);
+    Bitboard pawn_attacks(Bitboard pawns) const;
 
-    bool is_pseudo_legal_attack();
+    bool is_pseudo_legal_attack() const;
 
-    bool is_pseudo_legal_evasion();
+    bool is_pseudo_legal_evasion() const;
 
-    bool is_attacked(Square sq, Bitboard attackers_mask);
+    bool is_attacked(Square sq, Bitboard attackers_mask) const;
 
-    bool king_to_is_attacked(Square ksq);
+    bool king_to_is_attacked(Square ksq) const;
 
-    bool castling_possible(Castling c);
+    bool castling_possible(Castling c) const;
 
-    bool is_legal_castle(Castling c, const CastlingInfo &ci);
+    bool is_legal_castle(Castling c, const CastlingInfo &ci) const;
 
-    bool is_legal_castle();
+    bool is_legal_castle() const;
 
-    bool is_pinned();
+    bool is_pinned() const;
 
-    bool is_on_line(Square s0, Square s1, Square s2);
+    bool is_on_line(Square s0, Square s1, Square s2) const;
 
-    bool is_legal_ep(Square ksq);
+    bool is_legal_ep(Square ksq) const;
 
     void setup_fen_pieces(std::istringstream &iss);
 
@@ -231,17 +231,17 @@ private:
 
     void setup_fen_fullmove_cnt(std::istringstream &iss);
 
-    bool has_legal_move();
+    bool has_legal_move() const;
 
-    bool is_fifty_move_draw();
+    bool is_fifty_move_draw() const;
 
-    i32 repetition_count();
+    i32 repetition_count() const;
 
-    bool is_repetition_draw();
+    bool is_repetition_draw() const;
 
-    Piece color_on(Square sq);
+    Piece color_on(Square sq) const;
 
-    char debug_char(Square sq);
+    char debug_char(Square sq) const;
 
     std::array<Bitboard, piece::size> piece_bb_;
     std::array<Bitboard, color::size> color_bb_;
@@ -259,7 +259,7 @@ private:
     Score mg_material_;
     Score eg_material_;
     i32 game_phase_;
-    MoveInfo mi_;  // tmp variable
+    mutable MoveInfo mi_;  // tmp variable
 };
 
 const auto CASTLING_INFO = std::array<CastlingInfo, 4>{{

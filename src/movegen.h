@@ -17,15 +17,15 @@ struct BoardInfo {
 
 class MoveGenerator {
 public:
-    MoveGenerator(Board &board);
+    MoveGenerator(const Board &board);
 
     void generate(Type type);
 
-    const std::vector<Move> &moves();
+    const std::vector<Move> &moves() const;
 
-    static bool has_legal_move(Board &board);
+    static bool has_legal_move(const Board &board);
 
-    static bool is_legal_move(Board &board, Move move);
+    static bool is_legal_move(const Board &board, Move move);
 
     static u64 perft(Board &board, i32 depth, bool is_root = true);
 
@@ -34,23 +34,23 @@ public:
 private:
     void update_boardinfo();
 
-    Bitboard get_to_mask(Type type);
+    Bitboard get_to_mask(Type type) const;
 
     void add(Square from, Square to, Piece promotion = piece::None);
 
-    Bitboard rank_8();
+    Bitboard rank_8() const;
 
-    Bitboard single_pushes();
+    Bitboard single_pushes() const;
 
     void generate_single_pushes(Bitboard to_mask);
 
-    Bitboard double_pushes();
+    Bitboard double_pushes() const;
 
     void generate_double_pushes(Bitboard to_mask);
 
-    Bitboard pawn_capture_to_mask(Type type, Bitboard to_mask);
+    Bitboard pawn_capture_to_mask(Type type, Bitboard to_mask) const;
 
-    Bitboard quiet_promotion_tos(Bitboard to_mask);
+    Bitboard quiet_promotion_tos(Bitboard to_mask) const;
 
     void generate_quiet_queen_promotion(Type type, Bitboard to_mask);
 
@@ -58,7 +58,7 @@ private:
 
     void generate_quiet_promotions(Type type, Bitboard to_mask);
 
-    Bitboard pawn_captures(Direction d);
+    Bitboard pawn_captures(Direction d) const;
 
     void generate_normal_pawn_captures(Direction d, Bitboard to_mask);
 
@@ -79,7 +79,7 @@ private:
 
     static void check_pseudo_legal(MoveGenerator &gen);
 
-    Board &board_;
+    const Board &board_;
     std::vector<Move> moves_;
     BoardInfo bi_;  // tmp variable
 };

@@ -18,23 +18,23 @@ class __attribute__((packed)) Entry {
 public:
     void invalidate();
 
-    bool is_valid();
+    bool is_valid() const;
 
-    Score search_score(Ply ply);
+    Score search_score(Ply ply) const;
 
     void update(Hash hash, Move move, Score score, Ply depth, Bound bound,
                 Ply ply);
 
-    u32 hash();
+    u32 hash() const;
 
-    Move move();
+    Move move() const;
 
-    Ply depth();
+    Ply depth() const;
 
-    Bound bound();
+    Bound bound() const;
 
 private:
-    Score to_tt_score(Score score, Ply ply);
+    Score to_tt_score(Score score, Ply ply) const;
 
     u32 hash_;
     Move move_;
@@ -63,7 +63,7 @@ public:
 
     Entry &find(Hash hash);
 
-    i32 hashfull();
+    i32 hashfull() const;
 
 private:
     void init_buckets();
@@ -72,7 +72,7 @@ private:
 
     void init(u64 mb = 16);
 
-    i32 hash_index(Hash hash);
+    i32 hash_index(Hash hash) const;
 
     Bucket &get_bucket(Hash hash);
 
