@@ -1,6 +1,6 @@
-## Tuna Chess Engine
+## tuna
 
-**Tuna** is a high-performance chess engine written in C++20, achieving **2505.9 ELO** rating in tournament play. Built from scratch with modern C++ practices, it features bitboard representation, alpha-beta search, and sophisticated evaluation functions.
+**tuna** is a high-performance chess engine written in C++20, achieving **2505.9 ELO** rating in tournament play. Built from scratch with modern C++ practices, it features bitboard representation, alpha-beta search, and sophisticated evaluation functions.
 
 ### Key Features
 - **Advanced Search**: Alpha-beta with transposition tables, quiescence search, and pruning techniques
@@ -19,13 +19,8 @@
 
 ### Quick Start
 ```bash
-pixi run build    # Build the engine
-pixi run start    # Run the engine
-pixi run test     # Run test suite
+pixi run build  # Build the engine
+pixi run start  # Run the engine
+pixi run test   # Run test suite
 ```
-
-### Technical Skills Demonstrated
-- **Systems Programming**: Low-level bit manipulation, memory management, performance optimization
-- **Algorithm Design**: Search algorithms, move generation, evaluation functions
-- **DevOps**: Automated testing, tournament management, CI/CD pipeline
-- **Software Architecture**: Clean modular design with UCI protocol support
+Alternatively, just run CMake.
